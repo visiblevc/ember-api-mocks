@@ -1,0 +1,18 @@
+{
+  "solution": {
+    "@visiblevc/ember-api-mocks": {
+      "impact": "patch",
+      "oldVersion": "0.1.0",
+      "newVersion": "0.1.1",
+      "tagName": "latest",
+      "constraints": [
+        {
+          "impact": "patch",
+          "reason": "Appears in changelog section :memo: Documentation"
+        }
+      ],
+      "pkgJSONPath": "./package.json"
+    }
+  },
+  "description": "## Release (2026-11-23)\n\n* @visiblevc/ember-api-mocks 0.1.1 (patch)\n\n#### :memo: Documentation\n* `@visiblevc/ember-api-mocks`\n  * [#2](https://github.com/visiblevc/ember-api-mocks/pull/2) Tidy the README ([@whatthewhat](https://github.com/whatthewhat))\n\n#### Committers: 1\n- Mikhail Topolskiy ([@whatthewhat](https://github.com/whatthewhat))\n"
+}
