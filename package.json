@@ -1,14 +1,19 @@
 {
   "name": "@visiblevc/ember-api-mocks",
   "version": "0.0.0",
-  "description": "Request mocking and API-shaped test data for Ember apps, built on MSW",
+  "description": "Request mocking and API-shaped test data for Ember apps: in-page MSW interception, wire-format factories and store seeding",
   "keywords": [
     "ember-addon",
+    "ember-data",
     "msw",
     "mock",
+    "mocking",
     "testing",
     "factories",
-    "ember-data"
+    "json-api",
+    "active-model",
+    "mirage",
+    "factory-guy"
   ],
   "repository": {
     "type": "git",
