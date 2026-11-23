@@ -3,6 +3,7 @@ import { module, test } from 'qunit';
 import '#src/model-fragments.ts';
 import {
   build,
+  buildList,
   defineFactory,
   seed,
   seedList,
@@ -130,6 +131,15 @@ module('Unit | seed', function (hooks) {
 
       assert.strictEqual(person.firstName, 'Bo');
       assert.strictEqual(person.investor, investor);
+    });
+
+    test('relationships assigned after build reach the store', function (assert) {
+      const investor = build('investor');
+      investor.people = buildList('person', 2);
+
+      const seeded = seedRecord(investor);
+
+      assert.strictEqual(seeded.people.length, 2);
     });
 
     test('rejects keys the serializer does not read', function (assert) {

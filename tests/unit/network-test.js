@@ -239,4 +239,17 @@ module('Unit | network', function (hooks) {
       configureDefaults();
     }
   });
+
+  test("Percy's runtime address is bypassed too", async function (assert) {
+    window.PercySDKUtils = { percy: { address: 'http://127.0.0.1:1' } };
+    try {
+      const handle = api.get('http://127.0.0.1:1/percy/healthcheck', {});
+
+      await assert.rejects(fetch('http://127.0.0.1:1/percy/healthcheck'));
+
+      assert.strictEqual(handle.timesCalled, 0);
+    } finally {
+      delete window.PercySDKUtils;
+    }
+  });
 });

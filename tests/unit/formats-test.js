@@ -336,6 +336,59 @@ module('Unit | formats', function (hooks) {
     });
   });
 
+  module('relationships assigned after build', function () {
+    test('activeModel writes the wire key and sideloads built records', function (assert) {
+      const company = build('company', { name: 'Acme' });
+      const byId = build('subscription');
+      byId.company = 4;
+      const byRecord = build('subscription');
+      byRecord.company = company;
+
+      assert.deepEqual(payload('subscription', byId), {
+        subscription: { id: 1, plan_id: 'starter', company_id: 4 },
+      });
+      assert.deepEqual(payload('subscription', byRecord), {
+        subscription: { id: 2, plan_id: 'starter', company_id: 1 },
+        companies: [company],
+      });
+      assert.strictEqual(byRecord.company, company);
+    });
+
+    test('rest turns built records into ids and sideloads', function (assert) {
+      const post = build('post');
+      const author = build('author');
+      post.author = author;
+
+      assert.deepEqual(payload('post', post), {
+        post: { id: 1, title: 'Post #1', author: 1 },
+        authors: [author],
+      });
+    });
+
+    test('jsonApi treats them as relationships, not attributes', function (assert) {
+      const investor = build('investor');
+      const people = buildList('person', 2);
+      investor.people = people;
+      investor.group = 9;
+
+      const body = payload('investor', investor);
+
+      assert.deepEqual(body.data.attributes, { name: 'Investor #1' });
+      assert.deepEqual(body.data.relationships, {
+        people: {
+          data: [
+            { type: 'people', id: '1' },
+            { type: 'people', id: '2' },
+          ],
+        },
+      });
+      assert.deepEqual(
+        body.included.map(({ type, id }) => `${type}:${id}`),
+        ['people:1', 'people:2'],
+      );
+    });
+  });
+
   module('factories', function () {
     test('traits, transient values, sequences and function values', function (assert) {
       defineFactory('gadget', {

@@ -297,16 +297,98 @@ export function sideload<T extends BuiltRecord>(
   return record;
 }
 
+interface Prepared {
+  record: BuiltRecord;
+  related: Related[];
+  relationships: Map<string, Relationship>;
+}
+
+function declaredRelationships(
+  name: string,
+  format: Format,
+): Array<[string, string, Relationship]> {
+  return Object.entries(definitions.get(name)?.relationships ?? {})
+    .filter(([, association]) => association.kind !== 'fragment')
+    .map(([key, association]) => {
+      const kind = association.kind as RelationshipKind;
+      return [
+        key,
+        format.relationshipKey(key, kind),
+        { type: association.type, kind },
+      ];
+    });
+}
+
+function prepare(
+  type: string,
+  record: BuiltRecord,
+  format: Format,
+  cache: Map<BuiltRecord, Prepared>,
+): Prepared {
+  const cached = cache.get(record);
+  if (cached) {
+    return cached;
+  }
+  const relationships = new Map(relationshipMaps.get(record) ?? []);
+  const related = [...(sideloads.get(record) ?? [])];
+  let copy = record;
+  for (const [key, wireKey, relationship] of declaredRelationships(
+    factoryOf(record) ?? type,
+    format,
+  )) {
+    relationships.set(wireKey, relationship);
+    const source = key in record && key !== wireKey ? key : wireKey;
+    const value = record[source];
+    const items =
+      relationship.kind === 'hasMany'
+        ? Array.isArray(value)
+          ? (value as unknown[])
+          : []
+        : [value];
+    if (source === wireKey && !items.some(isBuilt)) {
+      continue;
+    }
+    if (copy === record) {
+      copy = { ...record };
+    }
+    delete copy[source];
+    const idOf = (item: unknown) => (isBuilt(item) ? item.id : item);
+    copy[wireKey] =
+      relationship.kind === 'hasMany' ? items.map(idOf) : idOf(value);
+    for (const item of items.filter(isBuilt)) {
+      related.push({
+        type: factoryOf(item) ?? relationship.type,
+        record: item,
+      });
+    }
+  }
+  const prepared = { record: copy, related, relationships };
+  cache.set(record, prepared);
+  cache.set(copy, prepared);
+  return prepared;
+}
+
 export function documentFor(
   type: string,
   data: BuiltRecord | BuiltRecord[],
   extra: Attrs,
   seeding: boolean,
 ): Attrs {
-  return formatOf(type).document(type, data, extra, {
+  const format = formatOf(type);
+  const cache = new Map<BuiltRecord, Prepared>();
+  const prepared = (record: BuiltRecord, recordType = type) =>
+    prepare(recordType, record, format, cache);
+  const records = Array.isArray(data)
+    ? data.map((record) => prepared(record).record)
+    : prepared(data).record;
+  return format.document(type, records, extra, {
     seeding,
-    related: (record) => sideloads.get(record) ?? [],
-    relationships: (record) => relationshipMaps.get(record) ?? new Map(),
+    related: (record) =>
+      prepared(record).related.map((entry) => ({
+        type: entry.type,
+        record: prepared(entry.record, entry.type).record,
+      })),
+    relationships: (record) => prepared(record).relationships,
   });
 }
 

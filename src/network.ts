@@ -11,7 +11,7 @@ import {
   installFetchWaiter,
   removeFetchWaiter,
 } from './fetch-waiter.ts';
-import { settings, type UnhandledPolicy } from './config.ts';
+import { percyOrigin, settings, type UnhandledPolicy } from './config.ts';
 
 export interface NearMiss {
   expected: Record<string, unknown>;
@@ -80,9 +80,12 @@ function applyPolicy(policy: UnhandledPolicy, message: string) {
 }
 
 export function isBypassed(url: string): boolean {
-  return (
-    !/^https?:/.test(url) || settings().bypass.includes(new URL(url).origin)
-  );
+  if (!/^https?:/.test(url)) {
+    return true;
+  }
+  const { origin } = new URL(url);
+  const { bypass, bypassPercy } = settings();
+  return bypass.includes(origin) || (bypassPercy && origin === percyOrigin());
 }
 
 const unhandled = http.all('*', ({ request, requestId }) => {

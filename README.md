@@ -83,7 +83,7 @@ If your app has its own wrappers in `tests/helpers`, wrap those instead: `withAp
 | `format` | `jsonApi()` | Default wire format. A factory can override it. |
 | `origins` | `[]` | More origins that count as your app (a CDN, a second API). |
 | `onUnhandledRequest` | `{ app: 'error', other: 'not-found' }` | What happens to a request no mock answers. See [Unhandled requests](#unhandled-requests). |
-| `bypass` | `['http://localhost:5338']` | Origins that always reach the network untouched. The default is Percy's local server; setting `bypass` replaces it. |
+| `bypass` | Percy's local server | Origins that always reach the network untouched. By default that is Percy's server, read from `@percy/sdk-utils` at request time (`http://localhost:5338` unless Percy says otherwise). Setting `bypass` replaces the default, so list Percy's address yourself if you need both. |
 | `beacons` | `false` | Send `navigator.sendBeacon` through `fetch` so mocks can answer it. |
 | `pluralize`, `singularize` | the app's inflector | Override pluralization. |
 
@@ -190,7 +190,7 @@ build('subscription', { company }); // company_id: 1, company sideloaded
 build('note', { subject: { type: 'person', id: 4 } }); // JSON:API linkage to people/4
 ```
 
-Without a declaration, write the wire key yourself: `{ company_id: 3 }`.
+Declared relationships also apply to values assigned after `build`: `subscription.company = company` serves `company_id` and sideloads the company. Without a declaration, write the wire key yourself: `{ company_id: 3 }`.
 
 `fragment(type, ...)` builds a nested object without an id, for embedded objects and ember-data-model-fragments.
 
@@ -368,6 +368,9 @@ With `configure({ beacons: true })`, `navigator.sendBeacon` goes through `fetch`
 - Built ids are numbers (JSON:API documents stringify them) and request bodies carry strings. Compare with `String(record.id)`.
 - A record in a response must come from `build` or `seed`. A record from `store.createRecord` throws; respond with JSON.
 - Mocked responses arrive in real time, also under fake timers.
+- Requests sent together (`Promise.all`) are matched after their bodies are parsed, so their handlers can run in either order. Assert on each handle's `calls`, not on the order of `api.requests`.
+- A `sequence` advances only when the default value is used. For names that follow the id, as in Mirage's `(i) => ...`, use a function of the record: `` name: ({ id }) => `User ${id}` ``.
+- `api.query` answers the same payload whatever the query. For paging or search, use `api.get` with a function that returns `payload(type, records.slice(...), { meta })`, or `api.resource` with `filter`.
 - JSON:API responses leave out linkage to records outside the document unless `linkage: 'always'`. `seed` always writes linkage.
 - Pluralization comes from `@ember-data/request-utils` on ember-data 5.3 and later, then `ember-inflector`, then built-in rules. Register custom rules where your serializers read them, or pass `configure({ pluralize, singularize })`.
 - `seed` uses `store.pushPayload`, which ember-data 5 deprecates.

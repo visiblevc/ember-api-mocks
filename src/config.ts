@@ -26,6 +26,7 @@ export interface Settings {
   onUnhandledRequest: { app: UnhandledPolicy; other: UnhandledPolicy };
   beacons: boolean;
   bypass: string[];
+  bypassPercy: boolean;
 }
 
 let options: Options = {};
@@ -48,11 +49,19 @@ export function resetConfiguration(): void {
   setInflector({});
 }
 
-function percyServer(): string {
-  const env = (
-    globalThis as { process?: { env?: Record<string, string | undefined> } }
-  ).process?.env;
-  return env?.PERCY_SERVER_ADDRESS ?? 'http://localhost:5338';
+const PERCY_DEFAULT = 'http://localhost:5338';
+
+export function percyOrigin(): string {
+  const scope = globalThis as {
+    PercySDKUtils?: { percy?: { address?: unknown } };
+    process?: { env?: Record<string, string | undefined> };
+  };
+  const runtime = scope.PercySDKUtils?.percy?.address;
+  const address =
+    typeof runtime === 'string'
+      ? runtime
+      : (scope.process?.env?.PERCY_SERVER_ADDRESS ?? PERCY_DEFAULT);
+  return new URL(URL.canParse(address) ? address : PERCY_DEFAULT).origin;
 }
 
 function toUrl(host: string): URL {
@@ -82,9 +91,8 @@ export function settings(): Settings {
       other: options.onUnhandledRequest?.other ?? 'not-found',
     },
     beacons: options.beacons ?? false,
-    bypass: (options.bypass ?? [percyServer()]).map(
-      (origin) => toUrl(origin).origin,
-    ),
+    bypass: (options.bypass ?? []).map((origin) => toUrl(origin).origin),
+    bypassPercy: options.bypass === undefined,
   };
   return resolved;
 }
