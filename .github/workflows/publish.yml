@@ -2,8 +2,8 @@
 # runs release-plan.
 #
 # Publishing uses npm trusted publishing (OIDC): no NPM_TOKEN secret.
-# Configure the trusted publisher on npmjs.com for this repository and
-# this workflow file (publish.yml) before the first release.
+# The trusted publisher on npmjs.com (this repository and publish.yml) is
+# added after the first, hand-published release; see RELEASE.md.
 
 name: Publish Stable
 

@@ -34,7 +34,7 @@ Once the prep work is completed, the actual release is straight forward: you jus
 
 npm only lets you add a trusted publisher to a package that already exists, so the maintainer publishes 0.1.0 by hand:
 
-1. Merge the Prepare Release PR so `package.json` says `0.1.0`, and make sure that commit is tagged `v0.1.0`. The Publish Stable workflow cannot publish yet; a failure at its npm step is expected.
+1. The `0.1.0` version bump is committed on `main` and tagged `v0.1.0` by hand, without a Prepare Release PR.
 2. Log in to npm (`npm login`) as a user who can publish to the `@visiblevc` scope.
 3. Publish from a clean checkout of the tag, so no stale `dist` or `declarations` files are packed:
 
