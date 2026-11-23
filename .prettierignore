@@ -9,7 +9,6 @@
 # misc
 /coverage/
 pnpm-lock.yaml
-config/ember-cli-update.json
 *.yaml
 *.yml
 *.md
