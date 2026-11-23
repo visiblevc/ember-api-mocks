@@ -2,6 +2,17 @@
 
 ## Release (2026-11-23)
 
+* @visiblevc/ember-api-mocks 0.2.0 (major)
+
+#### :boom: Breaking Change
+* `@visiblevc/ember-api-mocks`
+  * [#4](https://github.com/visiblevc/ember-api-mocks/pull/4) `api.query` takes a responder; stop exporting `sourceOf` and `HttpResponse` ([@whatthewhat](https://github.com/whatthewhat))
+
+#### Committers: 1
+- Mikhail Topolskiy ([@whatthewhat](https://github.com/whatthewhat))
+
+## Release (2026-11-23)
+
 * @visiblevc/ember-api-mocks 0.1.1 (patch)
 
 #### :memo: Documentation
