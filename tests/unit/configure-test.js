@@ -1,6 +1,6 @@
 import { module, test } from 'qunit';
 
-import { api, configure, defineFactory, setupTest } from '#src/index.ts';
+import { api, configure, defineFactory, rest, setupTest } from '#src/index.ts';
 import { resetConfiguration } from '#src/config.ts';
 
 import { API_HOST, configureDefaults } from '../config.ts';
@@ -62,16 +62,23 @@ module('Unit | configure', function (hooks) {
     assert.strictEqual(explicit.timesCalled, 1);
   });
 
-  test('a factory url overrides the collection path', async function (assert) {
+  test('a factory url or a rest path sets the collection path', async function (assert) {
     defineFactory('legacy-widget', { url: '/legacy/widgets' });
+    defineFactory('archived-post', {
+      format: rest({ path: (type) => `/v2/${type}s` }),
+    });
     const query = api.query('legacy-widget');
     const find = api.find('legacy-widget', 2);
+    const post = api.find('archived-post', 3);
 
     await send('GET', '/legacy/widgets');
     await send('GET', '/legacy/widgets/2');
+    await send('GET', '/v2/archived-posts/3');
 
-    assert.strictEqual(query.timesCalled, 1);
-    assert.strictEqual(find.timesCalled, 1);
+    assert.deepEqual(
+      [query, find, post].map((h) => h.timesCalled),
+      [1, 1, 1],
+    );
   });
 
   test('configure merges with earlier calls', async function (assert) {
@@ -84,24 +91,19 @@ module('Unit | configure', function (hooks) {
     assert.strictEqual(find.timesCalled, 1);
   });
 
-  test('origins are treated as the app', async function (assert) {
+  test('the page origin and origins are treated as the app', async function (assert) {
     configure({ origins: ['https://cdn.example.test/assets'] });
 
     const response = await fetch('https://cdn.example.test/file.json');
+    await fetch('/not-mocked');
 
     assert.strictEqual(response.status, 404);
-    assert.strictEqual(this.failures.length, 1);
+    assert.strictEqual(this.failures.length, 2);
     assert.true(
       this.failures[0].startsWith(
         'No handler for GET https://cdn.example.test/file.json',
       ),
     );
-  });
-
-  test('the page origin is always an app origin', async function (assert) {
-    await fetch('/not-mocked');
-
-    assert.strictEqual(this.failures.length, 1);
   });
 
   test('non-http requests always pass through', async function (assert) {

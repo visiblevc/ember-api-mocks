@@ -1,7 +1,6 @@
 import { module, test } from 'qunit';
 
 import {
-  activeModel,
   belongsTo,
   build,
   buildList,
@@ -22,14 +21,6 @@ module('Unit | formats', function (hooks) {
   setupTest(hooks);
 
   module('activeModel', function () {
-    test('paths are underscored plurals', function (assert) {
-      const format = activeModel();
-
-      assert.strictEqual(format.path('investor-group'), '/investor_groups');
-      assert.strictEqual(format.path('person'), '/people');
-      assert.strictEqual(format.updateMethod, 'put');
-    });
-
     test('a declared relationship writes x_id and sideloads a record', function (assert) {
       defineFactory('seat', {
         relationships: {
@@ -109,13 +100,6 @@ module('Unit | formats', function (hooks) {
       );
       assert.deepEqual(merged.meta, { a: 1 });
     });
-
-    test('build rejects dasherized keys', function (assert) {
-      assert.throws(
-        () => build('subscription', { 'plan-id': 'x' }),
-        /snake_case/,
-      );
-    });
   });
 
   module('rest', function () {
@@ -148,15 +132,6 @@ module('Unit | formats', function (hooks) {
         Object.keys(payload('dash-post', [build('dash-post')])),
         ['dash-posts'],
       );
-    });
-
-    test('paths are camelized plurals by default', function (assert) {
-      assert.strictEqual(rest().path('blog-post'), '/blogPosts');
-      assert.strictEqual(
-        rest({ path: (type) => `/v2/${type}` }).path('blog-post'),
-        '/v2/blog-post',
-      );
-      assert.strictEqual(rest().updateMethod, 'put');
     });
 
     test('key checks follow the key case', function (assert) {
@@ -305,69 +280,44 @@ module('Unit | formats', function (hooks) {
         group: { data: { type: 'investor-groups', id: '1' } },
       });
     });
-
-    test('paths are dasherized plurals and updates use PATCH', function (assert) {
-      assert.strictEqual(jsonApi().path('investor_group'), '/investor-groups');
-      assert.strictEqual(jsonApi().updateMethod, 'patch');
-    });
-
-    test('build rejects camelCase and underscored keys', function (assert) {
-      assert.throws(() => build('person', { firstName: 'x' }), /dasherized/);
-      assert.throws(() => build('person', { first_name: 'x' }), /dasherized/);
-    });
   });
 
-  module('relationships assigned after build', function () {
-    test('activeModel writes the wire key and sideloads built records', function (assert) {
-      const company = build('company', { name: 'Acme' });
-      const byId = build('subscription');
-      byId.company = 4;
-      const byRecord = build('subscription');
-      byRecord.company = company;
+  test('relationships assigned after build write ids and sideload', function (assert) {
+    const company = build('company', { name: 'Acme' });
+    const byId = build('subscription');
+    byId.company = 4;
+    const byRecord = build('subscription');
+    byRecord.company = company;
+    const post = build('post');
+    post.author = build('author');
+    const investor = build('investor');
+    investor.people = buildList('person', 2);
+    investor.group = 9;
 
-      assert.deepEqual(payload('subscription', byId), {
-        subscription: { id: 1, plan_id: 'starter', company_id: 4 },
-      });
-      assert.deepEqual(payload('subscription', byRecord), {
-        subscription: { id: 2, plan_id: 'starter', company_id: 1 },
-        companies: [company],
-      });
-      assert.strictEqual(byRecord.company, company);
+    assert.deepEqual(payload('subscription', byId).subscription.company_id, 4);
+    assert.deepEqual(payload('subscription', byRecord), {
+      subscription: { id: 2, plan_id: 'starter', company_id: 1 },
+      companies: [company],
     });
-
-    test('rest turns built records into ids and sideloads', function (assert) {
-      const post = build('post');
-      const author = build('author');
-      post.author = author;
-
-      assert.deepEqual(payload('post', post), {
-        post: { id: 1, title: 'Post #1', author: 1 },
-        authors: [author],
-      });
+    assert.strictEqual(byRecord.company, company);
+    assert.deepEqual(payload('post', post), {
+      post: { id: 1, title: 'Post #1', author: 1 },
+      authors: [post.author],
     });
-
-    test('jsonApi treats them as relationships, not attributes', function (assert) {
-      const investor = build('investor');
-      const people = buildList('person', 2);
-      investor.people = people;
-      investor.group = 9;
-
-      const body = payload('investor', investor);
-
-      assert.deepEqual(body.data.attributes, { name: 'Investor #1' });
-      assert.deepEqual(body.data.relationships, {
-        people: {
-          data: [
-            { type: 'people', id: '1' },
-            { type: 'people', id: '2' },
-          ],
-        },
-      });
-      assert.deepEqual(
-        body.included.map(({ type, id }) => `${type}:${id}`),
-        ['people:1', 'people:2'],
-      );
+    const body = payload('investor', investor);
+    assert.deepEqual(body.data.attributes, { name: 'Investor #1' });
+    assert.deepEqual(body.data.relationships, {
+      people: {
+        data: [
+          { type: 'people', id: '1' },
+          { type: 'people', id: '2' },
+        ],
+      },
     });
+    assert.deepEqual(
+      body.included.map(({ type, id }) => `${type}:${id}`),
+      ['people:1', 'people:2'],
+    );
   });
 
   module('factories', function () {

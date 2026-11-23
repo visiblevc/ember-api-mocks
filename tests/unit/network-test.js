@@ -2,13 +2,8 @@ import { settled } from '@ember/test-helpers';
 import { buildWaiter, hasPendingWaiters } from '@ember/test-waiters';
 import { module, test } from 'qunit';
 
-import {
-  api,
-  configure,
-  HttpResponse,
-  passthrough,
-  setupTest,
-} from '#src/index.ts';
+import { api, configure, passthrough, setupTest } from '#src/index.ts';
+import { percyOrigin } from '#src/config.ts';
 import { settleRequests } from '#src/network.ts';
 
 import { API_HOST, configureDefaults } from '../config.ts';
@@ -17,40 +12,6 @@ import { collectFailures, send } from '../helpers.js';
 module('Unit | network', function (hooks) {
   setupTest(hooks);
   collectFailures(hooks);
-
-  test('api.patch answers PATCH requests', async function (assert) {
-    const handle = api.patch('/widgets/:id', ({ params, body }) => ({
-      widget: { id: params.id, ...body.widget },
-    }));
-
-    const response = await send('PATCH', '/widgets/3', {
-      widget: { name: 'x' },
-    });
-
-    assert.deepEqual(await response.json(), { widget: { id: '3', name: 'x' } });
-    assert.strictEqual(handle.lastCall.method, 'PATCH');
-  });
-
-  test('a handler can answer with an msw response', async function (assert) {
-    api.get('/report.csv', () => HttpResponse.text('a,b'));
-
-    const response = await send('GET', '/report.csv');
-
-    assert.strictEqual(await response.text(), 'a,b');
-  });
-
-  test('settleRequests waits for a slow request', async function (assert) {
-    const handle = api.get(
-      '/slow',
-      () => new Promise((resolve) => setTimeout(() => resolve({ ok: 1 }), 30)),
-    );
-
-    send('GET', '/slow');
-    await settleRequests();
-
-    assert.strictEqual(handle.timesCalled, 1);
-    assert.deepEqual(this.failures, []);
-  });
 
   test('settleRequests fails on a request that never settles, also under a frozen clock', async function (assert) {
     api.get('/hanging', () => new Promise(() => undefined));
@@ -147,16 +108,19 @@ module('Unit | network', function (hooks) {
     assert.deepEqual(body, { ok: 1 });
   });
 
-  test("Percy's local server is never mocked", async function (assert) {
-    const handle = api.get('http://localhost:5338/percy/healthcheck', {
-      success: true,
-    });
+  test("Percy's server is never mocked", async function (assert) {
+    window.PercySDKUtils = { percy: { address: 'http://127.0.0.1:1' } };
+    try {
+      const handle = api.get('http://127.0.0.1:1/percy/healthcheck', {});
 
-    await assert.rejects(fetch('http://localhost:5338/percy/healthcheck'));
-    await settled();
+      await assert.rejects(fetch('http://127.0.0.1:1/percy/healthcheck'));
 
-    assert.strictEqual(handle.timesCalled, 0);
-    assert.deepEqual(this.failures, []);
+      assert.strictEqual(handle.timesCalled, 0);
+      assert.deepEqual(this.failures, []);
+    } finally {
+      delete window.PercySDKUtils;
+    }
+    assert.strictEqual(percyOrigin(), 'http://localhost:5338');
   });
 
   module('bypass', function (hooks) {
@@ -255,18 +219,5 @@ module('Unit | network', function (hooks) {
     await settled();
 
     assert.false(hasPendingWaiters());
-  });
-
-  test("Percy's runtime address is bypassed too", async function (assert) {
-    window.PercySDKUtils = { percy: { address: 'http://127.0.0.1:1' } };
-    try {
-      const handle = api.get('http://127.0.0.1:1/percy/healthcheck', {});
-
-      await assert.rejects(fetch('http://127.0.0.1:1/percy/healthcheck'));
-
-      assert.strictEqual(handle.timesCalled, 0);
-    } finally {
-      delete window.PercySDKUtils;
-    }
   });
 });

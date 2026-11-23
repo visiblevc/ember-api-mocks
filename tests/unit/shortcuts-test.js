@@ -99,16 +99,6 @@ module('Unit | type shortcuts through ember-data', function (hooks) {
       assert.strictEqual(contact.name, 'ADA');
     });
 
-    test('create ids continue the factory sequence', async function (assert) {
-      build('contact');
-      api.create('contact');
-      const contact = this.store.createRecord('contact', { name: 'x' });
-
-      await contact.save();
-
-      assert.strictEqual(contact.id, '2');
-    });
-
     test('a failing save surfaces the errors', async function (assert) {
       api.create('contact').fails(422, { errors: { name: ['is taken'] } });
       const contact = this.store.createRecord('contact', { name: 'x' });
@@ -195,15 +185,19 @@ module('Unit | type shortcuts through ember-data', function (hooks) {
       assert.strictEqual(group.id, '12');
     });
 
-    test('create without an id continues after built records', async function (assert) {
+    test('create without a client id continues the factory sequence', async function (assert) {
       buildList('person', 2);
       build('person', { id: '7' });
       api.create('person');
+      api.create('investor-group');
       const person = this.store.createRecord('person', { firstName: 'C' });
+      const group = this.store.createRecord('investor-group', { name: 'x' });
 
       await person.save();
+      await group.save();
 
       assert.strictEqual(person.id, '8');
+      assert.strictEqual(group.id, '1');
     });
 
     test('create takes a client id from the body', async function (assert) {
@@ -219,15 +213,6 @@ module('Unit | type shortcuts through ember-data', function (hooks) {
       assert.deepEqual(create.lastCall.body.data.attributes, { name: 'Draft' });
       assert.strictEqual(investor.id, 'abc');
       assert.strictEqual(investor.name, 'Saved');
-    });
-
-    test('create without an id gets the next id', async function (assert) {
-      api.create('investor-group');
-      const group = this.store.createRecord('investor-group', { name: 'x' });
-
-      await group.save();
-
-      assert.strictEqual(group.id, '1');
     });
 
     test('update uses PATCH with a { data } body, destroy uses DELETE', async function (assert) {

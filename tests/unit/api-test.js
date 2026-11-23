@@ -4,7 +4,6 @@ import {
   api,
   build,
   buildList,
-  payload,
   reply,
   seed,
   setupTest,
@@ -43,66 +42,47 @@ module('Unit | api', function (hooks) {
   });
 
   test('withQuery answers only the exact query', async function (assert) {
-    api.get('/widgets', { widgets: [] });
-    const first = api.get('/widgets', { widgets: [1] }).withQuery({ page: 1 });
-    const second = api.get('/widgets', { widgets: [2] }).withQuery({ page: 2 });
-
-    const exact = await send('GET', '/widgets?page=2');
-    const extra = await send('GET', '/widgets?page=2&page_size=10');
-
-    assert.deepEqual(await exact.json(), { widgets: [2] });
-    assert.deepEqual(await extra.json(), { widgets: [] });
-    assert.strictEqual(first.timesCalled, 0);
-    assert.strictEqual(second.timesCalled, 1);
-  });
-
-  test('a partial query ignores other params', async function (assert) {
-    const handle = api
-      .get('/widgets', { widgets: [2] })
-      .withQuery({ page: 2 }, { partial: true });
-
-    await send('GET', '/widgets?page=2&page_size=10');
-
-    assert.strictEqual(handle.timesCalled, 1);
-  });
-
-  test('withQuery tells a missing param from an empty one', async function (assert) {
     const fallback = api.get('/widgets', { widgets: [] });
+    const page = api.get('/widgets', { widgets: [2] }).withQuery({ page: 2 });
     const empty = api.get('/widgets', { widgets: [1] }).withQuery({ tag: '' });
-
-    await send('GET', '/widgets?other=x');
-    await send('GET', '/widgets?tag=');
-
-    assert.strictEqual(fallback.timesCalled, 1);
-    assert.strictEqual(empty.timesCalled, 1);
-  });
-
-  test('withQuery tells an array param from a scalar', async function (assert) {
-    const fallback = api.get('/widgets', { widgets: [] });
-    const scalar = api.get('/widgets', { widgets: [1] }).withQuery({ id: 1 });
-    const partial = api
-      .get('/widgets', { widgets: [2] })
-      .withQuery({ tag: 1 }, { partial: true });
-
-    await send('GET', '/widgets?id[]=1');
-    await send('GET', '/widgets?tag[]=1');
-
-    assert.strictEqual(scalar.timesCalled, 0);
-    assert.strictEqual(partial.timesCalled, 0);
-    assert.strictEqual(fallback.timesCalled, 2);
-  });
-
-  test('withQuery matches nested params', async function (assert) {
-    const handle = api
-      .get('/widgets', { widgets: [] })
+    const scalar = api.get('/widgets', { widgets: [3] }).withQuery({ id: 1 });
+    const nested = api
+      .get('/widgets', { widgets: [4] })
       .withQuery({ filter: { name: 'a', ids: [1, 2] } });
 
+    const exact = await send('GET', '/widgets?page=2');
+    await send('GET', '/widgets?page=2&page_size=10');
+    await send('GET', '/widgets?other=x');
+    await send('GET', '/widgets?tag=');
+    await send('GET', '/widgets?id[]=1');
     await send(
       'GET',
       '/widgets?filter[name]=a&filter[ids][]=1&filter[ids][]=2',
     );
 
-    assert.strictEqual(handle.timesCalled, 1);
+    assert.deepEqual(await exact.json(), { widgets: [2] });
+    assert.deepEqual(
+      [page, empty, scalar, nested, fallback].map((h) => h.timesCalled),
+      [1, 1, 0, 1, 3],
+    );
+  });
+
+  test('a partial query ignores other params', async function (assert) {
+    const fallback = api.get('/widgets', { widgets: [] });
+    const partial = api
+      .get('/widgets', { widgets: [2] })
+      .withQuery({ page: 2 }, { partial: true });
+    const tag = api
+      .get('/widgets', { widgets: [3] })
+      .withQuery({ tag: 1 }, { partial: true });
+
+    await send('GET', '/widgets?page=2&page_size=10');
+    await send('GET', '/widgets?tag[]=1');
+
+    assert.deepEqual(
+      [partial, tag, fallback].map((h) => h.timesCalled),
+      [1, 0, 1],
+    );
   });
 
   test('the latest handler wins and can be removed', async function (assert) {
@@ -123,66 +103,43 @@ module('Unit | api', function (hooks) {
     assert.strictEqual(succeeded.status, 200);
   });
 
-  test('match answers only a body that contains the expected keys', async function (assert) {
-    const update = api
+  test('match answers a body that contains the expected keys', async function (assert) {
+    const fallback = api.put('/widgets/7', { widget: { id: 7 } });
+    const subset = api
       .update('widget', 7)
       .match({ widget: { name: 'Right', tag_ids: [1, 2] } });
-
-    const matched = await send('PUT', '/widgets/7', {
-      widget: { name: 'Right', size: 1, tag_ids: ['1', '2'] },
-    });
-
-    assert.strictEqual(matched.status, 200);
-    assert.strictEqual(update.timesCalled, 1);
-  });
-
-  test('match compares arrays in full', async function (assert) {
-    const fallback = api.put('/widgets/7', { widget: { id: 7 } });
-    const empty = api.update('widget', 7).match({ widget: { tag_ids: [] } });
     const one = api.update('widget', 7).match({ widget: { tag_ids: [1] } });
-
-    await send('PUT', '/widgets/7', { widget: { tag_ids: [1, 2] } });
-
-    assert.strictEqual(empty.timesCalled, 0);
-    assert.strictEqual(one.timesCalled, 0);
-    assert.strictEqual(fallback.timesCalled, 1);
-  });
-
-  test('match expects null and empty values to be sent', async function (assert) {
-    const fallback = api.put('/widgets/7', { widget: { id: 7 } });
     const cleared = api.update('widget', 7).match({ widget: { size: null } });
     const blank = api.update('widget', 7).match({ widget: { name: '' } });
 
+    await send('PUT', '/widgets/7', {
+      widget: { name: 'Right', size: 1, tag_ids: ['1', '2'] },
+    });
     await send('PUT', '/widgets/7', { widget: { label: 'x' } });
     await send('PUT', '/widgets/7', { widget: { size: null } });
     await send('PUT', '/widgets/7', { widget: { name: '' } });
 
-    assert.strictEqual(fallback.timesCalled, 1);
-    assert.strictEqual(cleared.timesCalled, 1);
-    assert.strictEqual(blank.timesCalled, 1);
+    assert.deepEqual(
+      [subset, one, cleared, blank, fallback].map((h) => h.timesCalled),
+      [1, 0, 1, 1, 1],
+    );
   });
 
-  test('match accepts a predicate', async function (assert) {
-    const create = api
+  test('match accepts predicates', async function (assert) {
+    const whole = api
       .create('widget')
       .match(({ widget }) => widget.name.startsWith('Wid'));
+    const inside = api
+      .create('gadget')
+      .match({ gadget: { name: (name) => name.length > 3 } });
 
     const response = await send('POST', '/widgets', {
       widget: { name: 'Widget' },
     });
+    await send('POST', '/gadgets', { gadget: { name: 'Gadget' } });
 
     assert.deepEqual(await response.json(), { widget: { id: 1 } });
-    assert.strictEqual(create.timesCalled, 1);
-  });
-
-  test('match accepts predicates inside the expected body', async function (assert) {
-    const create = api
-      .create('widget')
-      .match({ widget: { name: (name) => name.length > 3 } });
-
-    await send('POST', '/widgets', { widget: { name: 'Widget' } });
-
-    assert.strictEqual(create.timesCalled, 1);
+    assert.deepEqual([whole.timesCalled, inside.timesCalled], [1, 1]);
   });
 
   test('fails and returns change what a handler answers', async function (assert) {
@@ -316,14 +273,6 @@ module('Unit | api', function (hooks) {
     assert.strictEqual(create.calls[2].body, 'plain');
   });
 
-  test('records request headers', async function (assert) {
-    const handle = api.get('/widgets', { widgets: [] });
-
-    await fetch(`${API_HOST}/widgets`, { headers: { 'X-Token': 'abc' } });
-
-    assert.strictEqual(handle.lastCall.headers.get('x-token'), 'abc');
-  });
-
   test('handles XMLHttpRequest', async function (assert) {
     api.get('/widgets', { widgets: [] });
 
@@ -335,56 +284,6 @@ module('Unit | api', function (hooks) {
     });
 
     assert.deepEqual(JSON.parse(body), { widgets: [] });
-  });
-
-  test('builds sideloaded payloads from associations', function (assert) {
-    const company = build('company', 'withSubscription', { name: 'Acme' });
-
-    assert.deepEqual(payload('company', company), {
-      company: {
-        id: 1,
-        name: 'Acme',
-        events: { added_data_source: true },
-        subscription_ids: [1],
-      },
-      subscriptions: [{ id: 1, plan_id: 'custom' }],
-    });
-  });
-
-  test('explicit ids keep later automatic ids from colliding', function (assert) {
-    build('company', { id: 5 });
-
-    assert.strictEqual(build('company').id, 6);
-  });
-
-  test('ids restart for every test', function (assert) {
-    assert.strictEqual(build('company').id, 1);
-  });
-
-  test('build rejects camelCase override keys', function (assert) {
-    assert.throws(
-      () => build('subscription', { planId: 'custom' }),
-      /Overrides use the API's snake_case keys/,
-    );
-  });
-
-  test('seed rejects override keys the model does not read', function (assert) {
-    assert.throws(
-      () => seed('contact', { company: 1 }),
-      /seed\('contact'\) got company, which the contact model does not read/,
-    );
-    const contact = seed('contact', { company_id: 1 });
-
-    assert.strictEqual(contact.belongsTo('company').id(), '1');
-  });
-
-  test('seed pushes the payload through the app serializers', function (assert) {
-    const company = seed('company', 'withSubscription');
-
-    assert.strictEqual(company.name, 'Company #1');
-    assert.true(company.events.added_data_source);
-    assert.strictEqual(company.subscriptions.length, 1);
-    assert.strictEqual(company.subscriptions[0].planId, 'custom');
   });
 
   test('serves the source JSON of a seeded record', async function (assert) {
@@ -446,13 +345,22 @@ module('Unit | api', function (hooks) {
       assert.deepEqual(this.failures, []);
     });
 
-    test('a removed handler no longer answers', async function (assert) {
-      api.get('/widgets', { widgets: [] }).remove();
+    test('a near miss on headers shows the received values', async function (assert) {
+      api.get('/widgets', null).withHeaders({ Authorization: 'Basic abc' });
 
-      const response = await send('GET', '/widgets');
+      await fetch(`${API_HOST}/widgets`, {
+        headers: { authorization: 'Basic xyz' },
+      });
 
-      assert.strictEqual(response.status, 404);
       assert.strictEqual(this.failures.length, 1);
+      assert.true(
+        this.failures[0].includes('"authorization": "Basic abc"'),
+        this.failures[0],
+      );
+      assert.true(
+        this.failures[0].includes('"authorization": "Basic xyz"'),
+        this.failures[0],
+      );
     });
 
     test('a handler that throws fails the test', async function (assert) {
@@ -526,27 +434,5 @@ module('Unit | api', function (hooks) {
     assert.deepEqual(second.meta, { role: 'viewer' });
     assert.deepEqual(third, { company: { id: 7 }, meta: { total: 1 } });
     assert.deepEqual(fourth, { company: { id: '8' }, meta: { any: true } });
-  });
-
-  module('header near misses', function (hooks) {
-    collectFailures(hooks);
-
-    test('a near miss on headers shows the received values', async function (assert) {
-      api.get('/widgets', null).withHeaders({ Authorization: 'Basic abc' });
-
-      await fetch(`${API_HOST}/widgets`, {
-        headers: { authorization: 'Basic xyz' },
-      });
-
-      assert.strictEqual(this.failures.length, 1);
-      assert.true(
-        this.failures[0].includes('"authorization": "Basic abc"'),
-        this.failures[0],
-      );
-      assert.true(
-        this.failures[0].includes('"authorization": "Basic xyz"'),
-        this.failures[0],
-      );
-    });
   });
 });

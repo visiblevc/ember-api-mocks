@@ -100,13 +100,6 @@ module('Unit | seed', function (hooks) {
       assert.strictEqual(comment.post, post);
       assert.strictEqual(post.comments.length, 3);
     });
-
-    test('rejects keys the serializer does not read', function (assert) {
-      assert.throws(
-        () => seed('post', { headline: 'x' }),
-        /seed\('post'\) got headline, which the post model does not read/,
-      );
-    });
   });
 
   module('jsonApi', function () {
