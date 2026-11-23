@@ -12,24 +12,29 @@ import {
 } from './network.ts';
 import { sourceOf } from './store.ts';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Json = any;
+
 export interface Call {
   method: string;
   url: string;
   params: Record<string, string | readonly string[] | undefined>;
-  query: Attrs;
-  body: unknown;
+  query: Json;
+  body: Json;
   headers: Headers;
 }
 
 type Responder = (call: Call) => unknown;
-type ResponseValue = unknown;
+type ResponseValue = Responder | Response | object | null | undefined;
+type HeaderValue = string | number | null | ((value: string | null) => unknown);
+type Arg = ResponseValue | string | number;
 type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 interface Guard {
   body?: unknown;
   query?: unknown;
   partialQuery?: unknown;
-  headers?: Record<string, unknown>;
+  headers?: Record<string, HeaderValue>;
 }
 
 const requests: Call[] = [];
@@ -48,15 +53,17 @@ export class Handle {
     return this.calls.length;
   }
 
-  get lastCall(): Call | undefined {
-    return this.calls.at(-1);
+  get lastCall(): Call {
+    return this.calls.at(-1) as Call;
   }
 
-  returns(...args: unknown[]): this {
+  returns(...args: Arg[]): this {
     const [value] = args;
     const isRaw = value instanceof Response || typeof value === 'function';
     this.response =
-      this.toResponse && !isRaw ? this.toResponse(...args) : value;
+      this.toResponse && !isRaw
+        ? this.toResponse(...args)
+        : (value as ResponseValue);
     return this;
   }
 
@@ -65,7 +72,7 @@ export class Handle {
     return this;
   }
 
-  match(body: unknown): this {
+  match(body: object | ((body: Json) => unknown)): this {
     this.where = { ...this.where, body };
     return this;
   }
@@ -76,7 +83,7 @@ export class Handle {
     return this;
   }
 
-  withHeaders(headers: Record<string, unknown>): this {
+  withHeaders(headers: Record<string, HeaderValue>): this {
     this.where = {
       ...this.where,
       headers: {
@@ -97,26 +104,34 @@ export class Handle {
   }
 }
 
-function assign(target: Attrs, path: string, value: unknown): void {
-  const keys = path.replace(/\]/g, '').split('[');
-  let node: unknown = target;
-  keys.slice(0, -1).forEach((key, index) => {
-    const container = node as Attrs;
-    container[key] ??= keys[index + 1] === '' ? [] : {};
-    node = container[key];
-  });
-  const last = keys.at(-1) ?? '';
-  if (Array.isArray(node) && last === '') {
-    node.push(value);
-  } else {
-    (node as Attrs)[last] = value;
-  }
-}
-
 function parseEntries(entries: Iterable<[string, unknown]>): Attrs {
   const result: Attrs = {};
-  for (const [key, value] of entries) {
-    assign(result, key, value);
+  for (const [path, value] of entries) {
+    const keys = path.replace(/\]/g, '').split('[');
+    let node: Attrs = result;
+    keys.forEach((key, index) => {
+      const next = keys[index + 1];
+      const slot =
+        Array.isArray(node) && key === '' ? String(node.length) : key;
+      const current = Object.hasOwn(node, slot) ? node[slot] : undefined;
+      const item =
+        next === undefined
+          ? current === undefined
+            ? value
+            : [current, value].flat()
+          : isObject(current)
+            ? current
+            : /^\d*$/.test(next)
+              ? []
+              : {};
+      Object.defineProperty(node, slot, {
+        value: item,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+      node = item as Attrs;
+    });
   }
   return result;
 }
@@ -166,8 +181,11 @@ function isSubset(expected: unknown, actual: unknown): boolean {
     return (
       isObject(actual) &&
       !Array.isArray(actual) &&
-      Object.entries(expected).every(([key, value]) =>
-        isSubset(value, actual[key]),
+      Object.entries(expected).every(
+        ([key, value]) =>
+          value === undefined ||
+          ((Object.hasOwn(actual, key) || typeof value === 'function') &&
+            isSubset(value, actual[key])),
       )
     );
   } else if (expected === null || expected === undefined) {
@@ -200,13 +218,13 @@ function isSameQuery(expected: unknown, actual: unknown): boolean {
 }
 
 function hasHeaders(
-  expected: Record<string, unknown>,
+  expected: Record<string, HeaderValue>,
   headers: Headers,
 ): boolean {
   return Object.entries(expected).every(([name, value]) => {
     const actual = headers.get(name);
     if (typeof value === 'function') {
-      return Boolean((value as (header: string | null) => unknown)(actual));
+      return Boolean(value(actual));
     }
     return value == null ? actual === null : actual === text(value);
   });
@@ -257,6 +275,10 @@ export function absoluteUrl(path: string): string {
     return path;
   } else if (path.startsWith('//')) {
     return `${window.location.protocol}${path}`;
+  } else if (!path.startsWith('/')) {
+    throw new Error(
+      `api paths start with "/" or are absolute URLs, got "${path}"`,
+    );
   }
   return `${settings().apiBase}${path}`;
 }
@@ -364,8 +386,10 @@ function resolve(typeOrRecord: unknown, ...args: unknown[]): Target {
   return { type, record, id: record.id, rest: args };
 }
 
-export function reply(status: number, body: unknown = {}): Response {
-  return HttpResponse.json(body as Attrs, { status });
+export function reply(status: number, body?: unknown): Response {
+  return body === undefined
+    ? new HttpResponse(null, { status })
+    : HttpResponse.json(body as Attrs, { status });
 }
 
 export function clearRequests(): void {
@@ -397,7 +421,7 @@ export const api = {
   delete: (path: string, response?: ResponseValue) =>
     register('delete', path, response),
 
-  find(typeOrRecord: unknown, ...args: unknown[]): Handle {
+  find(typeOrRecord: string | object, ...args: Arg[]): Handle {
     const { type, record, id, rest } = resolve(typeOrRecord, ...args);
     const [last] = rest;
     const raw =
@@ -422,7 +446,7 @@ export const api = {
     const many =
       (list: unknown[] = [], more: Attrs = {}) =>
       () =>
-        payload(type, list.map(sourceOf) as BuiltRecord[], more);
+        payload(type, list.map(sourceOf), more);
 
     return register(
       'get',
@@ -451,7 +475,7 @@ export const api = {
     );
   },
 
-  update(typeOrRecord: unknown, ...args: unknown[]): Handle {
+  update(typeOrRecord: string | object, ...args: Arg[]): Handle {
     const { type, id, rest } = resolve(typeOrRecord, ...args);
     const attrs = (rest[0] ?? {}) as Attrs | Responder;
     const updated = (values: Attrs | Responder) =>
@@ -468,7 +492,7 @@ export const api = {
     );
   },
 
-  destroy(typeOrRecord: unknown, ...args: unknown[]): Handle {
+  destroy(typeOrRecord: string | object, ...args: Arg[]): Handle {
     const { type, id, rest } = resolve(typeOrRecord, ...args);
     return register('delete', memberUrl(type, id), rest[0] ?? null);
   },

@@ -29,6 +29,7 @@ export interface DocumentContext {
 export interface Format {
   readonly name: string;
   readonly updateMethod: 'put' | 'patch';
+  readonly separatesRelationships: boolean;
   keyError(key: string): string | undefined;
   relationshipKey(key: string, kind: RelationshipKind): string;
   path(type: string): string;
@@ -104,6 +105,7 @@ export function activeModel(options: ActiveModelOptions = {}): Format {
   return {
     name: 'activeModel',
     updateMethod: 'put',
+    separatesRelationships: false,
     keyError: (key) => keyError('snake', key),
     relationshipKey: (key, kind) =>
       kind === 'belongsTo' ? `${key}_id` : `${singularize(key)}_ids`,
@@ -133,6 +135,7 @@ export function rest(options: RestOptions = {}): Format {
   return {
     name: 'rest',
     updateMethod: 'put',
+    separatesRelationships: false,
     keyError: (key) => keyError(keys, key),
     relationshipKey: (key) => key,
     path: options.path ?? ((type) => `/${pluralize(camelize(type))}`),
@@ -179,6 +182,7 @@ export function jsonApi(options: JsonApiOptions = {}): Format {
   return {
     name: 'jsonApi',
     updateMethod: 'patch',
+    separatesRelationships: true,
     keyError: (key) => keyError('dash', key),
     relationshipKey: (key) => key,
     path: options.path ?? ((type) => `/${resourceType(type)}`),

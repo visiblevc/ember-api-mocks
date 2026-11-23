@@ -1,5 +1,5 @@
 import { settled } from '@ember/test-helpers';
-import { hasPendingWaiters } from '@ember/test-waiters';
+import { buildWaiter, hasPendingWaiters } from '@ember/test-waiters';
 import { module, test } from 'qunit';
 
 import { api, configure, HttpResponse, setupTest } from '#src/index.ts';
@@ -71,6 +71,20 @@ module('Unit | network', function (hooks) {
     assert.false(hasPendingWaiters());
     assert.deepEqual(this.failures, [
       'Requests were still pending when the test ended',
+    ]);
+  });
+
+  test('settleRequests names a pending waiter that is not a request', async function (assert) {
+    const waiter = buildWaiter('someone-else');
+    const token = waiter.beginAsync();
+    try {
+      await settleRequests();
+    } finally {
+      waiter.endAsync(token);
+    }
+
+    assert.deepEqual(this.failures, [
+      'Test waiters were still pending when the test ended: someone-else',
     ]);
   });
 

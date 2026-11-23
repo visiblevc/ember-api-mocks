@@ -23,11 +23,20 @@ module('Unit | api', function (hooks) {
       widget: { id: params.id },
     }));
 
-    const response = await send('GET', '/widgets/7?tab=all&ids[]=1&ids[]=2');
+    const response = await send(
+      'GET',
+      '/widgets/7?tab=all&ids[]=1&ids[]=2&tag=a&tag=b&at[0]=x&__proto__[polluted]=1&constructor[prototype][polluted]=1',
+    );
 
     assert.deepEqual(await response.json(), { widget: { id: '7' } });
     assert.strictEqual(handle.timesCalled, 1);
-    assert.deepEqual(handle.lastCall.query, { tab: 'all', ids: ['1', '2'] });
+    const { query } = handle.lastCall;
+    assert.deepEqual(
+      [query.tab, query.ids, query.tag, query.at],
+      ['all', ['1', '2'], ['a', 'b'], ['x']],
+    );
+    assert.strictEqual({}.polluted, undefined);
+    assert.deepEqual(Object.getOwnPropertyNames(query.__proto__), ['polluted']);
     assert.strictEqual(handle.lastCall.method, 'GET');
     assert.strictEqual(api.lastRequest('GET', '/widgets/7'), handle.lastCall);
     assert.deepEqual(api.requests, [handle.lastCall]);
@@ -139,15 +148,18 @@ module('Unit | api', function (hooks) {
     assert.strictEqual(fallback.timesCalled, 1);
   });
 
-  test('match expects null to be sent', async function (assert) {
+  test('match expects null and empty values to be sent', async function (assert) {
     const fallback = api.put('/widgets/7', { widget: { id: 7 } });
     const cleared = api.update('widget', 7).match({ widget: { size: null } });
+    const blank = api.update('widget', 7).match({ widget: { name: '' } });
 
-    await send('PUT', '/widgets/7', { widget: { name: 'x' } });
+    await send('PUT', '/widgets/7', { widget: { label: 'x' } });
     await send('PUT', '/widgets/7', { widget: { size: null } });
+    await send('PUT', '/widgets/7', { widget: { name: '' } });
 
     assert.strictEqual(fallback.timesCalled, 1);
     assert.strictEqual(cleared.timesCalled, 1);
+    assert.strictEqual(blank.timesCalled, 1);
   });
 
   test('match accepts a predicate', async function (assert) {
@@ -199,6 +211,30 @@ module('Unit | api', function (hooks) {
     assert.strictEqual(raw.status, 418);
     assert.deepEqual(await computed.json(), { page: '3' });
     assert.strictEqual(empty.status, 204);
+  });
+
+  test('reply without a body sends an empty body', async function (assert) {
+    api.get('/accepted', reply(202));
+    api.get('/down', reply(502));
+    api.get('/gone', reply(204));
+
+    const accepted = await send('GET', '/accepted');
+    const down = await send('GET', '/down');
+    const gone = await send('GET', '/gone');
+
+    assert.deepEqual(
+      [accepted.status, down.status, gone.status],
+      [202, 502, 204],
+    );
+    assert.strictEqual(await accepted.text(), '');
+    assert.strictEqual(await down.text(), '');
+  });
+
+  test('paths start with a slash or are absolute URLs', function (assert) {
+    assert.throws(
+      () => api.get('widgets'),
+      /api paths start with "\/" or are absolute URLs, got "widgets"/,
+    );
   });
 
   test('find without a record answers any id', async function (assert) {

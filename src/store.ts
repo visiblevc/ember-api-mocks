@@ -5,6 +5,7 @@ import {
   buildList,
   documentFor,
   factoryOf,
+  formatOf,
   hooksOf,
   overridesOf,
   transientOf,
@@ -74,14 +75,16 @@ export function attributeKeys(
 function modelKeys(
   serializer: Serializer,
   modelClass: ModelClass,
-): Set<string> {
+): { keys: Set<string>; relationships: Set<string> } {
   const keys = attributeKeys(serializer, modelClass);
+  const relationships = new Set<string>();
   modelClass.eachRelationship((relationship, { kind }) => {
     const key = serializer.keyForRelationship(
       relationship,
       kind,
       'deserialize',
     );
+    relationships.add(key);
     keys.add(key);
     keys.add(`${key.replace(/_ids?$/, '')}_type`);
   });
@@ -92,15 +95,26 @@ function modelKeys(
       keys.add(key);
     }
   }
-  return keys;
+  return { keys, relationships };
 }
 
 function rejectUnusedOverrides(
   name: string,
   record: BuiltRecord,
-  keys: Set<string>,
+  { keys, relationships }: ReturnType<typeof modelKeys>,
 ): void {
-  const unused = overridesOf(record).filter((key) => !keys.has(key));
+  const overrides = overridesOf(record);
+  const undeclared = overrides.find(
+    ({ key, relationship }) => !relationship && relationships.has(key),
+  );
+  if (undeclared && formatOf(name).separatesRelationships) {
+    throw new Error(
+      `seed('${name}') got ${undeclared.key}, a relationship the ${name} factory does not declare. Declare it in the factory's relationships: { ${undeclared.key}: belongsTo(...) } or hasMany(...).`,
+    );
+  }
+  const unused = overrides
+    .map(({ key }) => key)
+    .filter((key) => !keys.has(key));
   if (unused.length) {
     throw new Error(
       `seed('${name}') got ${unused.join(', ')}, which the ${name} model does not read. Use the keys the API sends.`,
@@ -153,12 +167,12 @@ export function seedList<T = unknown>(name: string, ...args: unknown[]): T[] {
   return buildList(name, ...args).map((record) => push(name, record) as T);
 }
 
-export function seedRecord<T = unknown>(record: BuiltRecord): T {
+export function seedRecord<T = unknown>(record: object): T {
   const name = factoryOf(record);
   if (!name) {
     throw new Error('seedRecord() takes a record from build()');
   }
-  return push(name, record) as T;
+  return push(name, record as BuiltRecord) as T;
 }
 
 export function sourceOf(value: unknown): unknown {

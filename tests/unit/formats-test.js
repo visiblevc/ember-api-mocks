@@ -184,6 +184,13 @@ module('Unit | formats', function (hooks) {
       );
     });
 
+    test('built records under an undeclared key throw', function (assert) {
+      assert.throws(
+        () => build('post', { comments: buildList('comment', 2) }),
+        /build\('post'\) got built records under "comments". Declare it in the post factory's relationships/,
+      );
+    });
+
     test('a declared relationship takes an id, a record or a { type, id }', function (assert) {
       const author = build('author');
       const byId = build('post', { author: 7 });
@@ -300,11 +307,12 @@ module('Unit | formats', function (hooks) {
 
     test('a polymorphic relationship takes { type, id }', function (assert) {
       defineFactory('note', {
-        format: jsonApi({ linkage: 'always' }),
+        format: jsonApi(),
         relationships: { subject: belongsTo('investor') },
       });
 
       const note = build('note', { subject: { type: 'person', id: 4 } });
+      sideload(note, build('person', { id: 4 }));
 
       assert.deepEqual(payload('note', note).data.relationships, {
         subject: { data: { type: 'people', id: '4' } },
@@ -471,6 +479,17 @@ module('Unit | formats', function (hooks) {
         { id: 3, plan_id: 'a' },
         { id: 10, plan_id: 'custom' },
       ]);
+    });
+
+    test('hasMany in a default or trait needs a count', function (assert) {
+      defineFactory('holder', {
+        traits: { empty: { subscriptions: hasMany('subscription') } },
+      });
+
+      assert.throws(
+        () => build('holder', 'empty'),
+        /hasMany\('subscription'\) in a default or trait needs a count/,
+      );
     });
 
     test('unknown factories and traits throw', function (assert) {

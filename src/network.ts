@@ -1,4 +1,8 @@
-import { buildWaiter, hasPendingWaiters } from '@ember/test-waiters';
+import {
+  buildWaiter,
+  getPendingWaiterState,
+  hasPendingWaiters,
+} from '@ember/test-waiters';
 import { FetchInterceptor } from '@mswjs/interceptors/fetch';
 import { XMLHttpRequestInterceptor } from '@mswjs/interceptors/XMLHttpRequest';
 import { http, HttpResponse, passthrough, type HttpHandler } from 'msw';
@@ -195,7 +199,15 @@ export async function settleRequests(): Promise<void> {
     quiet = pendingRequests.size === 0 && !hasPendingWaiters() ? quiet + 1 : 0;
   }
   if (quiet < 2) {
-    reportFailure(new Error('Requests were still pending when the test ended'));
+    const names = Object.keys(getPendingWaiterState().waiters);
+    const others = names.filter((name) => !name.startsWith('ember-api-mocks:'));
+    reportFailure(
+      new Error(
+        others.length && others.length === names.length
+          ? `Test waiters were still pending when the test ended: ${others.join(', ')}`
+          : 'Requests were still pending when the test ended',
+      ),
+    );
   }
   forgetPendingRequests();
   endOpenResponses();

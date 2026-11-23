@@ -148,6 +148,13 @@ module('Unit | seed', function (hooks) {
         /seed\('person'\) got nickname/,
       );
     });
+
+    test('rejects a relationship the factory does not declare', function (assert) {
+      assert.throws(
+        () => seed('investor-group', { investors: [1] }),
+        /seed\('investor-group'\) got investors, a relationship the investor-group factory does not declare/,
+      );
+    });
   });
 });
 

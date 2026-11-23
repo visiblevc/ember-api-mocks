@@ -1,3 +1,4 @@
+import type { Json } from './api.ts';
 import { settings } from './config.ts';
 import type {
   Attrs,
@@ -8,19 +9,29 @@ import type {
   RelationshipKind,
 } from './formats.ts';
 
-type Trait = Attrs | ((record: BuiltRecord) => void);
+type Value =
+  | ((record: Json) => unknown)
+  | object
+  | string
+  | number
+  | boolean
+  | null
+  | undefined;
+type Values = Record<string, Value>;
+type Trait = Values | ((record: Json) => void);
 type Overrides = Attrs;
 type BuildArg = string | Overrides;
+type ListArg = number | BuildArg | BuildArg[];
 
 export interface FactoryDefinition {
-  default?: Attrs;
+  default?: Values;
   traits?: Record<string, Trait>;
-  transient?: Attrs;
+  transient?: Values;
   relationships?: Record<string, Association>;
   format?: Format;
   url?: string;
-  beforeSeed?: (record: BuiltRecord, store: unknown) => void;
-  afterSeed?: (model: unknown, transient: Attrs) => void;
+  beforeSeed?: (record: Json, store: Json) => void;
+  afterSeed?: (model: Json, transient: Json) => void;
 }
 
 const definitions = new Map<string, FactoryDefinition>();
@@ -28,9 +39,14 @@ const sequences = new Map<string, number>();
 const sideloads = new WeakMap<BuiltRecord, Related[]>();
 const relationshipMaps = new WeakMap<BuiltRecord, Map<string, Relationship>>();
 const transients = new WeakMap<BuiltRecord, Attrs>();
-const overrideKeys = new WeakMap<BuiltRecord, string[]>();
+const overrideKeys = new WeakMap<BuiltRecord, Override[]>();
 const autoIds = new WeakSet<BuiltRecord>();
 const factories = new WeakMap<BuiltRecord, string>();
+
+interface Override {
+  key: string;
+  relationship: boolean;
+}
 
 class Sequence {
   constructor(readonly generate: (n: number) => unknown) {}
@@ -40,7 +56,7 @@ export class Association {
   constructor(
     readonly kind: RelationshipKind | 'fragment',
     readonly type: string,
-    readonly args: BuildArg[],
+    readonly args: ListArg[],
   ) {}
 }
 
@@ -84,7 +100,7 @@ export function belongsTo(type: string, ...args: BuildArg[]): Association {
   return new Association('belongsTo', type, args);
 }
 
-export function hasMany(type: string, ...args: BuildArg[]): Association {
+export function hasMany(type: string, ...args: ListArg[]): Association {
   return new Association('hasMany', type, args);
 }
 
@@ -171,7 +187,7 @@ export function build<T extends object = BuiltRecord>(
     if (!traitAttrs) {
       throw new Error(`Factory "${name}" has no trait "${trait}"`);
     } else if (typeof traitAttrs === 'function') {
-      mutations.push(traitAttrs);
+      mutations.push(traitAttrs as (record: BuiltRecord) => void);
     } else {
       Object.assign(attrs, traitAttrs);
     }
@@ -210,14 +226,21 @@ export function build<T extends object = BuiltRecord>(
     } else if (value instanceof Sequence) {
       record[key] = value.generate(nextId(`${name}.${key}`));
     } else if (value instanceof Association) {
-      if (value.kind === 'fragment') {
-        const { id: _id, ...nested } = build(value.type, ...value.args);
+      if (value.kind === 'hasMany' && value.args.length === 0) {
+        throw new Error(
+          `hasMany('${value.type}') in a default or trait needs a count`,
+        );
+      } else if (value.kind === 'fragment') {
+        const { id: _id, ...nested } = build(
+          value.type,
+          ...(value.args as BuildArg[]),
+        );
         record[key] = nested;
       } else {
         const built =
           value.kind === 'hasMany'
             ? buildList(value.type, ...value.args)
-            : build(value.type, ...value.args);
+            : build(value.type, ...(value.args as BuildArg[]));
         relate(record, key, value, built, format, related, relationships);
       }
     } else if (declared[key]) {
@@ -225,6 +248,10 @@ export function build<T extends object = BuiltRecord>(
     } else if (typeof value === 'function') {
       record[key] = undefined;
       deferred.push([key, value as (record: BuiltRecord) => unknown]);
+    } else if ([value].flat().some(isBuilt)) {
+      throw new Error(
+        `build('${name}') got built records under "${key}". Declare it in the ${name} factory's relationships: { ${key}: belongsTo(...) } or hasMany(...).`,
+      );
     } else {
       record[key] = clone(value);
     }
@@ -244,8 +271,11 @@ export function build<T extends object = BuiltRecord>(
         const association =
           value instanceof Association ? value : declared[key];
         return association && association.kind !== 'fragment'
-          ? format.relationshipKey(key, association.kind)
-          : key;
+          ? {
+              key: format.relationshipKey(key, association.kind),
+              relationship: true,
+            }
+          : { key, relationship: false };
       }),
   );
   return record as T;
@@ -274,7 +304,7 @@ export function transientOf(record: BuiltRecord): Attrs {
   return transients.get(record) ?? {};
 }
 
-export function overridesOf(record: BuiltRecord): string[] {
+export function overridesOf(record: BuiltRecord): Override[] {
   return overrideKeys.get(record) ?? [];
 }
 
@@ -282,18 +312,18 @@ export function hasAutoId(record: BuiltRecord): boolean {
   return autoIds.has(record);
 }
 
-export function sideload<T extends BuiltRecord>(
+export function sideload<T extends object>(
   record: T,
-  ...related: Array<BuiltRecord | null | undefined>
+  ...related: Array<object | null | undefined>
 ): T {
-  const list = sideloads.get(record) ?? [];
+  const list = sideloads.get(record as BuiltRecord) ?? [];
   for (const item of related) {
     const type = item && factoryOf(item);
     if (item && type) {
-      list.push({ type, record: item });
+      list.push({ type, record: item as BuiltRecord });
     }
   }
-  sideloads.set(record, list);
+  sideloads.set(record as BuiltRecord, list);
   return record;
 }
 
@@ -394,10 +424,10 @@ export function documentFor(
 
 export function payload(
   type: string,
-  data: BuiltRecord | BuiltRecord[],
+  data: object | object[],
   extra: Attrs = {},
 ): Attrs {
-  return documentFor(type, data, extra, false);
+  return documentFor(type, data as BuiltRecord | BuiltRecord[], extra, false);
 }
 
 export function mergePayloads(...payloads: Attrs[]): Attrs {

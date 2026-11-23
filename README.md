@@ -173,7 +173,7 @@ defineFactory('subscription', {
 
 ### Relationships
 
-In `default` or a trait, `belongsTo(type, ...)` and `hasMany(type, count?, ...)` build the related records, write their ids, and remember them so they are sideloaded (or `included`) with the parent:
+In `default` or a trait, `belongsTo(type, ...)` and `hasMany(type, count, ...)` build the related records, write their ids, and remember them so they are sideloaded (or `included`) with the parent:
 
 ```js
 const company = build('company', 'withSubscription');
@@ -187,10 +187,10 @@ In `relationships`, they only declare the type, so overrides can pass an id, a l
 ```js
 build('subscription', { company: 3 }); // company_id: 3
 build('subscription', { company }); // company_id: 1, company sideloaded
-build('note', { subject: { type: 'person', id: 4 } }); // JSON:API linkage to people/4
+build('note', { subject: { type: 'person', id: 4 } }); // JSON:API: { type: 'people', id: '4' }
 ```
 
-Declared relationships also apply to values assigned after `build`: `subscription.company = company` serves `company_id` and sideloads the company. Without a declaration, write the wire key yourself: `{ company_id: 3 }`.
+Declared relationships also apply to values assigned after `build`: `subscription.company = company` serves `company_id` and sideloads the company. Without a declaration, write the wire key yourself: `{ company_id: 3 }`. A built record under an undeclared key throws. JSON:API keeps relationships apart from attributes, so declare every relationship there; `seed` throws on an undeclared one.
 
 `fragment(type, ...)` builds a nested object without an id, for embedded objects and ember-data-model-fragments.
 
@@ -258,7 +258,7 @@ api.patch('/settings', null);
 api.delete('https://auth.example.com/sessions', null);
 ```
 
-Paths that start with `/` are joined to `apiHost`, without `namespace`; absolute URLs are used as is. A response is an object, a function of the call (sync or async), a `Response` (`reply(status, body)`, or MSW's `HttpResponse`, re-exported here), or `null` for a 204. A model from `seed` inside a plain response is served as its source JSON.
+Paths that start with `/` are joined to `apiHost`, without `namespace`; absolute URLs are used as is. Any other path throws. A response is an object, a function of the call (sync or async), a `Response` (`reply(status, body)`, `reply(status)` for an empty body, or MSW's `HttpResponse`, re-exported here), or `null` for a 204. A model from `seed` inside a plain response is served as its source JSON.
 
 ### Handles
 
@@ -277,8 +277,8 @@ assert.deepEqual(create.lastCall.body.contact.tag_ids, ['1', '2']);
 ```
 
 - `timesCalled`, `calls` and `lastCall`. A call has `method`, `url`, `params`, `query`, `body` (parsed JSON or form data) and `headers`.
-- `.match(body)` answers only when the body contains these keys. Objects match as subsets, arrays in full, values compare as strings, `null` must be sent, and a function is called with the value.
-- `.withQuery(params)` answers only the exact query: every param present, nothing extra, and `ids[]=1` is an array, not `1`. `.withQuery(params, { partial: true })` ignores other params.
+- `.match(body)` answers only when the body contains these keys. Objects match as subsets, arrays in full, values compare as strings, a key must be sent (`null` and `''` too), and a function is called with the value.
+- `.withQuery(params)` answers only the exact query: every param present, nothing extra, and `ids[]=1` is an array, not `1`. A repeated `ids=1&ids=2` is an array too. `.withQuery(params, { partial: true })` ignores other params.
 - `.withHeaders(headers)` matches header names in any case. A value is a string, a predicate, or `null` for absent.
 - `.returns(...)` changes the response. On a shortcut it takes the shortcut's arguments: `query.returns(list, { meta })`, `find.returns(record, extra)`, `create.returns(attrs)`.
 - `.fails(status = 500, body = {})` answers with an error.
