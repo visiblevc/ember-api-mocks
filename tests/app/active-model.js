@@ -1,7 +1,7 @@
+import RESTAdapter from '@ember-data/adapter/rest';
+import { InvalidError } from '@ember-data/adapter/error';
 import Model, { attr, belongsTo, hasMany } from '@ember-data/model';
-import ActiveModelAdapter, {
-  ActiveModelSerializer,
-} from 'active-model-adapter';
+import RESTSerializer from '@ember-data/serializer/rest';
 import { fragment, fragmentArray } from 'ember-data-model-fragments/attributes';
 import Fragment from 'ember-data-model-fragments/fragment';
 import {
@@ -10,13 +10,49 @@ import {
   fragmentTransformFor,
 } from 'ember-data-model-fragments/serializers/utils';
 
+import { pluralize, singularize, underscore } from '#src/inflection.ts';
+
 import { API_HOST } from '../config.ts';
 
-class Adapter extends ActiveModelAdapter {
+class Adapter extends RESTAdapter {
   host = API_HOST;
+
+  pathForType(modelName) {
+    return pluralize(underscore(modelName));
+  }
+
+  handleResponse(status, headers, payload, requestData) {
+    if (this.isInvalid(status, headers, payload)) {
+      return new InvalidError(
+        Object.entries(payload.errors).flatMap(([key, messages]) =>
+          [messages].flat().map((detail) => ({
+            detail,
+            source: { pointer: `/data/attributes/${key}` },
+          })),
+        ),
+      );
+    }
+    return super.handleResponse(status, headers, payload, requestData);
+  }
 }
 
-class Serializer extends ActiveModelSerializer {
+class Serializer extends RESTSerializer {
+  keyForAttribute(name) {
+    return underscore(name);
+  }
+
+  keyForRelationship(name, kind) {
+    return kind === 'belongsTo'
+      ? `${underscore(name)}_id`
+      : `${singularize(underscore(name))}_ids`;
+  }
+
+  payloadKeyFromModelName(modelName) {
+    return underscore(modelName);
+  }
+
+  serializeHasMany() {}
+
   transformFor(attributeType) {
     return fragmentTransformFor(this, attributeType, super.transformFor);
   }
