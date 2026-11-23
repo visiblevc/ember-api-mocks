@@ -222,7 +222,15 @@ export function build(name: string, ...args: BuildArg[]): BuiltRecord {
   factories.set(record, name);
   overrideKeys.set(
     record,
-    Object.keys(overrides).filter((key) => !transientKeys.has(key)),
+    Object.entries(overrides)
+      .filter(([key]) => !transientKeys.has(key))
+      .map(([key, value]) => {
+        const association =
+          value instanceof Association ? value : declared[key];
+        return association && association.kind !== 'fragment'
+          ? format.relationshipKey(key, association.kind)
+          : key;
+      }),
   );
   return record;
 }
@@ -270,15 +278,25 @@ export function sideload<T extends BuiltRecord>(
   return record;
 }
 
+export function documentFor(
+  type: string,
+  data: BuiltRecord | BuiltRecord[],
+  extra: Attrs,
+  seeding: boolean,
+): Attrs {
+  return formatOf(type).document(type, data, extra, {
+    seeding,
+    related: (record) => sideloads.get(record) ?? [],
+    relationships: (record) => relationshipMaps.get(record) ?? new Map(),
+  });
+}
+
 export function payload(
   type: string,
   data: BuiltRecord | BuiltRecord[],
   extra: Attrs = {},
 ): Attrs {
-  return formatOf(type).document(type, data, extra, {
-    related: (record) => sideloads.get(record) ?? [],
-    relationships: (record) => relationshipMaps.get(record) ?? new Map(),
-  });
+  return documentFor(type, data, extra, false);
 }
 
 export function mergePayloads(...payloads: Attrs[]): Attrs {

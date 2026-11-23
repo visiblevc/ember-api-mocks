@@ -21,6 +21,7 @@ export interface Related {
 }
 
 export interface DocumentContext {
+  seeding: boolean;
   related(record: BuiltRecord): Related[];
   relationships(record: BuiltRecord): Map<string, Relationship>;
 }
@@ -207,7 +208,7 @@ export function jsonApi(options: JsonApiOptions = {}): Format {
             continue;
           }
           const linked = toLinkage(relationship, value);
-          if (linkage === 'always' || isPresent(linked)) {
+          if (linkage === 'always' || context.seeding || isPresent(linked)) {
             relationships[key] = { data: linked };
           }
         }

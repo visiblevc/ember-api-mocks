@@ -289,15 +289,21 @@ interface Target {
   type: string;
   record?: BuiltRecord;
   id?: unknown;
+  rest: unknown[];
 }
 
-function resolve(typeOrRecord: unknown, recordOrId?: unknown): Target {
+function resolve(typeOrRecord: unknown, ...args: unknown[]): Target {
   if (typeof typeOrRecord === 'string') {
+    const [recordOrId, ...rest] = args;
+    if (isObject(recordOrId) && !('id' in recordOrId)) {
+      return { type: typeOrRecord, rest: args };
+    }
     const isRecord = isObject(recordOrId);
     return {
       type: typeOrRecord,
       record: isRecord ? (recordOrId as BuiltRecord) : undefined,
       id: isRecord ? (recordOrId as BuiltRecord).id : recordOrId,
+      rest,
     };
   }
   const record = typeOrRecord as BuiltRecord & {
@@ -309,7 +315,7 @@ function resolve(typeOrRecord: unknown, recordOrId?: unknown): Target {
       'api shortcuts need a type name, a record from build() or a seeded model',
     );
   }
-  return { type, record, id: record.id };
+  return { type, record, id: record.id, rest: args };
 }
 
 export function reply(status: number, body: unknown = {}): Response {
@@ -392,12 +398,9 @@ export const api = {
     );
   },
 
-  update(
-    typeOrRecord: unknown,
-    recordOrId?: unknown,
-    attrs: Attrs | Responder = {},
-  ): Handle {
-    const { type, id } = resolve(typeOrRecord, recordOrId);
+  update(typeOrRecord: unknown, ...args: unknown[]): Handle {
+    const { type, id, rest } = resolve(typeOrRecord, ...args);
+    const attrs = (rest[0] ?? {}) as Attrs | Responder;
     const updated = (values: Attrs | Responder) =>
       typeof values === 'function'
         ? values

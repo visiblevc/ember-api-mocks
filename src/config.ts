@@ -40,6 +40,12 @@ export function configure(next: Options): void {
   }
 }
 
+export function resetConfiguration(): void {
+  options = {};
+  resolved = undefined;
+  setInflector({});
+}
+
 function toUrl(host: string): URL {
   return new URL(host, window.location.href);
 }
@@ -51,7 +57,9 @@ export function settings(): Settings {
   const api = toUrl(options.apiHost ?? window.location.origin);
   resolved = {
     apiBase: `${api.origin}${api.pathname}`.replace(/\/$/, ''),
-    namespace: (options.namespace ?? '').replace(/\/$/, ''),
+    namespace: (options.namespace ?? '')
+      .replace(/^\/*/, '/')
+      .replace(/\/+$/, ''),
     appOrigins: [
       ...new Set([
         window.location.origin,

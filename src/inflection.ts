@@ -16,7 +16,7 @@ const IRREGULAR: Record<string, string> = {
   woman: 'women',
 };
 
-function basicPluralize(word: string): string {
+export function basicPluralize(word: string): string {
   const irregular = IRREGULAR[word];
   if (irregular) {
     return irregular;
@@ -28,7 +28,7 @@ function basicPluralize(word: string): string {
   return `${word}s`;
 }
 
-function basicSingularize(word: string): string {
+export function basicSingularize(word: string): string {
   const irregular = Object.entries(IRREGULAR).find(
     ([, plural]) => plural === word,
   );

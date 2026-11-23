@@ -128,11 +128,12 @@ export function finishRequest(requestId: string): void {
 }
 
 const nativeSetTimeout = window.setTimeout.bind(window);
-const SETTLE_LIMIT = 1000;
+const SETTLE_LIMIT_MS = 1000;
 
 export async function settleRequests(): Promise<void> {
+  const deadline = performance.now() + SETTLE_LIMIT_MS;
   let quiet = 0;
-  for (let tries = 0; quiet < 2 && tries < SETTLE_LIMIT; tries++) {
+  while (quiet < 2 && performance.now() < deadline) {
     await new Promise((resolve) => nativeSetTimeout(resolve, 0));
     quiet = pendingRequests.size === 0 && !hasPendingWaiters() ? quiet + 1 : 0;
   }

@@ -3,10 +3,10 @@ import { getContext } from '@ember/test-helpers';
 import {
   build,
   buildList,
+  documentFor,
   factoryOf,
   hooksOf,
   overridesOf,
-  payload,
   transientOf,
 } from './factories.ts';
 import type { Attrs, BuiltRecord } from './formats.ts';
@@ -15,6 +15,9 @@ import type { Attrs, BuiltRecord } from './formats.ts';
 interface ModelClass {
   prototype: object;
   eachAttribute(callback: (name: string) => void): void;
+  eachComputedProperty?(
+    callback: (name: string, meta: { isAttribute?: boolean } | null) => void,
+  ): void;
   eachRelationship(
     callback: (name: string, meta: { kind: string }) => void,
   ): void;
@@ -55,9 +58,15 @@ export function attributeKeys(
   modelClass: ModelClass,
 ): Set<string> {
   const keys = new Set(['id']);
-  modelClass.eachAttribute((attribute) => {
+  const add = (attribute: string) => {
     keys.add(attribute);
     keys.add(serializer.keyForAttribute(attribute, 'deserialize'));
+  };
+  modelClass.eachAttribute(add);
+  modelClass.eachComputedProperty?.((name, meta) => {
+    if (meta?.isAttribute) {
+      add(name);
+    }
   });
   return keys;
 }
@@ -123,7 +132,10 @@ function push(name: string, record: BuiltRecord): unknown {
     modelKeys(store.serializerFor(name), modelClass),
   );
   hooksOf(name).beforeSeed?.(record, store);
-  store.pushPayload(name, JSON.parse(JSON.stringify(payload(name, record))));
+  store.pushPayload(
+    name,
+    JSON.parse(JSON.stringify(documentFor(name, record, {}, true))),
+  );
   const model = store.peekRecord(name, String(record.id)) as object;
   sources.set(model, record);
   hooksOf(name).afterSeed?.(model, transientOf(record));
