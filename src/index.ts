@@ -1,6 +1,6 @@
 export { http, HttpResponse, passthrough } from 'msw';
 
-export { api, reply, type Call, type Handle, type Resource } from './api.ts';
+export { api, reply, type Call, type Handle } from './api.ts';
 export { configure, type Options } from './config.ts';
 export {
   belongsTo,

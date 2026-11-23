@@ -286,24 +286,6 @@ assert.deepEqual(create.lastCall.body.contact.tag_ids, ['1', '2']);
 
 The newest mock for a URL answers first. A mock whose guard does not fit is skipped and the next one is tried. `api.requests` lists every answered call and `api.lastRequest(method, path)` finds one.
 
-### In-memory resources
-
-`api.resource` serves a collection the app can change:
-
-```js
-const contacts = api.resource('contact', buildList('contact', 2), {
-  filter: (contact, query) =>
-    !query.search || contact.name.includes(query.search),
-});
-
-await click('[data-test-delete="1"]');
-
-assert.deepEqual(contacts.records.map(({ id }) => id), [2]);
-assert.strictEqual(contacts.destroy.timesCalled, 1);
-```
-
-It registers `index`, `find`, `create`, `update` and `destroy` on the type's URL, each a handle. A create builds a record with the factory from the request body and appends it to `records`, an update merges the body into the record, a destroy removes it, and unknown ids get a 404.
-
 ### Unhandled requests
 
 | Policy | Effect |
@@ -350,14 +332,30 @@ With `configure({ beacons: true })`, `navigator.sendBeacon` goes through `fetch`
 | --- | --- |
 | `server.create('user', attrs)` | `build('user', attrs)` plus a mock that serves it |
 | `server.createList('user', 3)` | `buildList('user', 3)` |
-| `this.get('/users')` shorthand | `api.query('user', records)` or `api.resource('user', records)` |
+| `this.get('/users')` shorthand | `api.query('user', records)` |
 | `this.get('/users/:id', (schema, request) => ...)` | `api.get('/users/:id', ({ params, query, body }) => ...)` |
-| `schema.users.where(...)`, `.update(...)` | plain arrays: `resource.records`, or state in your responder |
+| `schema.users.where(...)`, `.update(...)` | an array of built records kept in the test, read and changed by responders |
 | `this.normalizedRequestAttrs()` | `call.body` |
 | `new Response(422, {}, errors)` | `reply(422, errors)` |
 | `server.pretender.handledRequests` | `api.requests`, `handle.calls` |
 | factory `afterCreate` | a trait function, or `afterSeed` for `seed` |
 | `this.passthrough()` | `onUnhandledRequest: { other: 'passthrough' }`, or `passthrough()` from a responder |
+
+Where Mirage kept state in its ORM, keep built records in the test and let responders read and change them:
+
+```js
+const users = buildList('user', 2);
+api.query('user', users);
+const create = api.post('/users', ({ body }) => {
+  const user = build('user', body.user);
+  users.push(user);
+  return payload('user', user);
+});
+api.destroy('user', ({ params }) => {
+  users.splice(users.findIndex(({ id }) => String(id) === params.id), 1);
+  return null;
+});
+```
 
 ## Things to know
 
@@ -371,7 +369,7 @@ With `configure({ beacons: true })`, `navigator.sendBeacon` goes through `fetch`
 - Mocked responses arrive in real time, also under fake timers.
 - Requests sent together (`Promise.all`) are matched after their bodies are parsed, so their handlers can run in either order. Assert on each handle's `calls`, not on the order of `api.requests`.
 - A `sequence` advances only when the default value is used. For names that follow the id, as in Mirage's `(i) => ...`, use a function of the record: `` name: ({ id }) => `User ${id}` ``.
-- `api.query` answers the same payload whatever the query. For paging or search, use `api.get` with a function that returns `payload(type, records.slice(...), { meta })`, or `api.resource` with `filter`.
+- `api.query` answers the same payload whatever the query. For paging or search, use `api.get` with a function that returns `payload(type, records.slice(...), { meta })`.
 - JSON:API responses leave out linkage to records outside the document unless `linkage: 'always'`. `seed` always writes linkage.
 - Pluralization comes from `@ember-data/request-utils` on ember-data 5.3 and later, then `ember-inflector`, then built-in rules. Register custom rules where your serializers read them, or pass `configure({ pluralize, singularize })`.
 - `seed` uses `store.pushPayload`, which ember-data 5 deprecates.
@@ -379,7 +377,7 @@ With `configure({ beacons: true })`, `navigator.sendBeacon` goes through `fetch`
 
 ### Custom formats
 
-A format is an object with `name`, `updateMethod`, `keyError(key)`, `relationshipKey(key, kind)`, `path(type)`, `document(type, data, extra, context)`, `idFromBody(type, body)` and `attributesFromBody(type, body)`. Start from one of the built-ins.
+A format is an object with `name`, `updateMethod`, `keyError(key)`, `relationshipKey(key, kind)`, `path(type)`, `document(type, data, extra, context)` and `idFromBody(type, body)`. Start from one of the built-ins.
 
 ## Contributing
 

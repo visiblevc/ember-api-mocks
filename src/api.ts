@@ -1,14 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
 import { settings } from './config.ts';
-import {
-  build,
-  factoryOf,
-  formatOf,
-  nextId,
-  payload,
-  urlOf,
-} from './factories.ts';
+import { factoryOf, formatOf, nextId, payload, urlOf } from './factories.ts';
 import type { Attrs, BuiltRecord } from './formats.ts';
 import {
   finishRequest,
@@ -334,15 +327,6 @@ function memberUrl(type: string, id?: unknown): string {
   return `${collectionUrl(type)}/${id == null ? ':id' : text(id)}`;
 }
 
-export interface Resource {
-  records: BuiltRecord[];
-  index: Handle;
-  find: Handle;
-  create: Handle;
-  update: Handle;
-  destroy: Handle;
-}
-
 interface Target {
   type: string;
   record?: BuiltRecord;
@@ -487,60 +471,5 @@ export const api = {
   destroy(typeOrRecord: unknown, ...args: unknown[]): Handle {
     const { type, id, rest } = resolve(typeOrRecord, ...args);
     return register('delete', memberUrl(type, id), rest[0] ?? null);
-  },
-
-  resource(
-    type: string,
-    records: BuiltRecord[] = [],
-    {
-      filter,
-    }: { filter?: (record: BuiltRecord, query: Attrs) => unknown } = {},
-  ): Resource {
-    const format = formatOf(type);
-    const missing = () => reply(404, {});
-    const lookup = (id: unknown) =>
-      records.find((record) => text(record.id) === text(id));
-
-    const index = register('get', collectionUrl(type), ({ query }: Call) =>
-      payload(
-        type,
-        filter ? records.filter((record) => filter(record, query)) : records,
-      ),
-    );
-    const find = register('get', memberUrl(type), ({ params }: Call) => {
-      const record = lookup(params.id);
-      return record ? payload(type, record) : missing();
-    });
-    const create = register('post', collectionUrl(type), ({ body }: Call) => {
-      const id = format.idFromBody(type, body);
-      const record = build(type, {
-        ...format.attributesFromBody(type, body),
-        ...(id == null ? {} : { id }),
-      });
-      records.push(record);
-      return payload(type, record);
-    });
-    const update = register(
-      format.updateMethod,
-      memberUrl(type),
-      ({ params, body }: Call) => {
-        const record = lookup(params.id);
-        if (!record) {
-          return missing();
-        }
-        Object.assign(record, format.attributesFromBody(type, body));
-        return payload(type, record);
-      },
-    );
-    const destroy = register('delete', memberUrl(type), ({ params }: Call) => {
-      const record = lookup(params.id);
-      if (!record) {
-        return missing();
-      }
-      records.splice(records.indexOf(record), 1);
-      return null;
-    });
-
-    return { records, index, find, create, update, destroy };
   },
 };
