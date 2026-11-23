@@ -21,7 +21,6 @@
   },
   "license": "MIT",
   "author": "Visible",
-  "type": "module",
   "imports": {
     "#src/*": "./src/*"
   },
