@@ -24,8 +24,4 @@ export {
   type RestOptions,
 } from './formats.ts';
 export { seed, seedList, seedRecord } from './store.ts';
-export {
-  setupApplicationTest,
-  setupRenderingTest,
-  setupTest,
-} from './setup.ts';
+export { setupApiMocks } from './setup.ts';

@@ -7,8 +7,8 @@ import {
   seed,
   seedList,
   seedRecord,
-  setupTest,
 } from '#src/index.ts';
+import { setupTest } from '../helpers.js';
 import { sourceOf } from '#src/store.ts';
 
 module('Unit | seed', function (hooks) {

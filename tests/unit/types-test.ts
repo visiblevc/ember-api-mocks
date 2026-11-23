@@ -1,3 +1,4 @@
+import { setupTest } from 'ember-qunit';
 import { module, test } from 'qunit';
 
 import {
@@ -13,7 +14,7 @@ import {
   seedList,
   seedRecord,
   sequence,
-  setupTest,
+  setupApiMocks,
   sideload,
 } from '#src/index.ts';
 
@@ -29,6 +30,7 @@ interface Company {
 
 module('Unit | types', function (hooks) {
   setupTest(hooks);
+  setupApiMocks(hooks);
 
   test('build and seed take the record type', function (assert) {
     const json = build<CompanyJson>('company', { name: 'Acme' });

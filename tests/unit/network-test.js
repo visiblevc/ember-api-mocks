@@ -2,12 +2,12 @@ import { settled } from '@ember/test-helpers';
 import { buildWaiter, hasPendingWaiters } from '@ember/test-waiters';
 import { module, test } from 'qunit';
 
-import { api, configure, passthrough, setupTest } from '#src/index.ts';
+import { api, configure, passthrough } from '#src/index.ts';
 import { percyOrigin } from '#src/config.ts';
 import { settleRequests } from '#src/network.ts';
 
 import { API_HOST, configureDefaults } from '../config.ts';
-import { collectFailures, send } from '../helpers.js';
+import { collectFailures, send, setupTest } from '../helpers.js';
 
 module('Unit | network', function (hooks) {
   setupTest(hooks);

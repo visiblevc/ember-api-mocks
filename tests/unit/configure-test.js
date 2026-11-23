@@ -1,10 +1,10 @@
 import { module, test } from 'qunit';
 
-import { api, configure, defineFactory, rest, setupTest } from '#src/index.ts';
+import { api, configure, defineFactory, rest } from '#src/index.ts';
 import { resetConfiguration } from '#src/config.ts';
 
 import { API_HOST, configureDefaults } from '../config.ts';
-import { collectFailures, send } from '../helpers.js';
+import { collectFailures, send, setupTest } from '../helpers.js';
 
 module('Unit | configure', function (hooks) {
   setupTest(hooks);

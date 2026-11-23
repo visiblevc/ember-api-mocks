@@ -8,7 +8,8 @@ Request mocking and API-shaped test data for Ember apps.
 - A request the test did not mock fails the test and says which mock came close.
 
 ```js
-import { api, buildList, setupApplicationTest } from '@visiblevc/ember-api-mocks';
+import { api, buildList } from '@visiblevc/ember-api-mocks';
+import { setupApplicationTest } from 'my-app/tests/helpers';
 
 module('Acceptance | contacts', function (hooks) {
   setupApplicationTest(hooks);
@@ -40,7 +41,7 @@ CI runs the addon's tests against:
 
 Classic ember-cli apps with ember-auto-import 2 work too, but CI does not build one. ember-data is optional: `api` and `build` work without it, `seed` needs it.
 
-Peer dependencies: `qunit` 2.17+, `ember-qunit` 8+, `@ember/test-helpers` 3+, `@ember/test-waiters` 3+. Optional: `ember-data` 4.12+, `ember-inflector` 4+, `@ember-data/request-utils` 5.3+, `ember-data-model-fragments` 9+.
+Peer dependencies: `qunit` 2.17+, `@ember/test-helpers` 3+, `@ember/test-waiters` 3+. Optional: `ember-data` 4.12+, `ember-inflector` 4+, `@ember-data/request-utils` 5.3+, `ember-data-model-fragments` 9+.
 
 ## Installation
 
@@ -62,17 +63,33 @@ configure({
 });
 ```
 
-Then use this package's setup functions instead of ember-qunit's:
+Then turn mocking on in the setup functions of `tests/helpers/index.js`, the file Ember's blueprint creates for extra test setup. Call `setupApiMocks` after the ember-qunit setup:
 
 ```js
 import {
-  setupApplicationTest,
-  setupRenderingTest,
-  setupTest,
-} from '@visiblevc/ember-api-mocks';
+  setupApplicationTest as upstreamSetupApplicationTest,
+  setupRenderingTest as upstreamSetupRenderingTest,
+  setupTest as upstreamSetupTest,
+} from 'ember-qunit';
+import { setupApiMocks } from '@visiblevc/ember-api-mocks';
+
+export function setupApplicationTest(hooks, options) {
+  upstreamSetupApplicationTest(hooks, options);
+  setupApiMocks(hooks);
+}
+
+export function setupRenderingTest(hooks, options) {
+  upstreamSetupRenderingTest(hooks, options);
+  setupApiMocks(hooks);
+}
+
+export function setupTest(hooks, options) {
+  upstreamSetupTest(hooks, options);
+  setupApiMocks(hooks);
+}
 ```
 
-If your app has its own wrappers in `tests/helpers`, call these from them.
+Tests import these from `my-app/tests/helpers`, as generated tests already do. The order matters: QUnit runs `afterEach` hooks in reverse, so calling `setupApiMocks` second lets it wait for pending requests before ember-qunit tears the app down. Called first, it throws.
 
 ### `configure` options
 
@@ -205,7 +222,8 @@ Declared relationships also apply to values assigned after `build`: `subscriptio
 `seed`, `seedList` and `seedRecord` push factory JSON through your serializers with `store.pushPayload` and return the models.
 
 ```js
-import { seed, setupRenderingTest } from '@visiblevc/ember-api-mocks';
+import { seed } from '@visiblevc/ember-api-mocks';
+import { setupRenderingTest } from 'my-app/tests/helpers';
 
 test('shows the plan', async function (assert) {
   this.company = seed('company', 'withSubscription', { name: 'Acme' });
@@ -286,7 +304,7 @@ A request no mock answers gets a 404. For the page origin, `apiHost` and `origin
 
 ### Waiting for requests
 
-Mocked requests register with a test waiter, so `await settled()`, `click`, `visit` and the other helpers wait for them, including a raw `fetch` from a service. A `fetch` stays pending until the app has read the response body with `json()`, `text()` or another reader, or for two macrotasks if it never reads one. Reading `response.body` as a stream is not tracked. After each test, the setup functions wait up to one second for requests and other test waiters still pending, and fail the test if any remain. Mocked responses arrive in real time, also under fake timers.
+Mocked requests register with a test waiter, so `await settled()`, `click`, `visit` and the other helpers wait for them, including a raw `fetch` from a service. A `fetch` stays pending until the app has read the response body with `json()`, `text()` or another reader, or for two macrotasks if it never reads one. Reading `response.body` as a stream is not tracked. After each test, `setupApiMocks` waits up to one second for requests and other test waiters still pending, and fail the test if any remain. Mocked responses arrive in real time, also under fake timers.
 
 ### Beacons
 
@@ -309,7 +327,7 @@ With `configure({ beacons: true })`, `navigator.sendBeacon` goes through `fetch`
 | `mockDelete(user)` | `api.destroy(user)` |
 | `mock({ type: 'GET', url, responseText })` | `api.get(url, response)` |
 | `.timesCalled` | `.timesCalled`, `.calls`, `.lastCall` |
-| `setupFactoryGuy(this)` | `setupTest(hooks)` and the other setup functions |
+| `setupFactoryGuy(this)` | `setupApiMocks(hooks)` in `tests/helpers/index.js` |
 
 `match` sees the request body as sent, in the API's keys, not model attributes.
 

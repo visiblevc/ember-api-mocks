@@ -1,6 +1,14 @@
+import { setupTest as upstreamSetupTest } from 'ember-qunit';
+
+import { setupApiMocks } from '#src/index.ts';
 import { setFailureReporter } from '#src/network.ts';
 
 import { API_HOST } from './config.ts';
+
+export function setupTest(hooks, options) {
+  upstreamSetupTest(hooks, options);
+  setupApiMocks(hooks);
+}
 
 export function send(method, path, body, host = API_HOST) {
   return fetch(`${host}${path}`, {
