@@ -23,8 +23,42 @@ const compatDeps = {
   '@ember/optional-features': '^2.2.0',
 };
 
+function emberData(range) {
+  return {
+    'ember-data': range,
+    '@ember-data/adapter': range,
+    '@ember-data/model': range,
+    '@ember-data/serializer': range,
+    '@ember-data/store': range,
+  };
+}
+
 export default {
   scenarios: [
+    {
+      name: 'ember-data-4.12',
+      npm: {
+        devDependencies: {
+          ...emberData('~4.12.8'),
+          'ember-source': '~5.12.0',
+          'ember-inflector': '^4.0.3',
+          '@ember/string': '^3.1.1',
+          ...compatDeps,
+        },
+      },
+      env: {
+        ENABLE_COMPAT_BUILD: true,
+      },
+      files: compatFiles,
+    },
+    {
+      name: 'ember-data-latest',
+      npm: {
+        devDependencies: {
+          ...emberData('^5.8.0'),
+        },
+      },
+    },
     {
       name: 'ember-lts-5.8',
       npm: {
