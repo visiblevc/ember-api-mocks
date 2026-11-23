@@ -190,4 +190,53 @@ module('Unit | network', function (hooks) {
 
     assert.false(hasPendingWaiters());
   });
+
+  test('settled() waits for a slow response body the app reads', async function (assert) {
+    api.get(
+      '/slow-body',
+      () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              setTimeout(() => {
+                controller.enqueue(new TextEncoder().encode('{"x":42}'));
+                controller.close();
+              }, 30);
+            },
+          }),
+          { headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
+    const state = {};
+
+    (async () => {
+      const response = await fetch(`${API_HOST}/slow-body`);
+      state.value = (await response.clone().json()).x;
+    })();
+    await settled();
+
+    assert.strictEqual(state.value, 42);
+  });
+
+  test('an unread response does not hold settled()', async function (assert) {
+    api.get('/ignored', { x: 1 });
+
+    const response = await fetch(`${API_HOST}/ignored`);
+    await settled();
+
+    assert.true(response.ok);
+    assert.false(hasPendingWaiters());
+  });
+
+  test('a fetch that fails releases its waiter', async function (assert) {
+    configure({ onUnhandledRequest: { other: 'passthrough' } });
+    try {
+      await assert.rejects(fetch('http://127.0.0.1:1/down'));
+      await settled();
+
+      assert.false(hasPendingWaiters());
+    } finally {
+      configureDefaults();
+    }
+  });
 });

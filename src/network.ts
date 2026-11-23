@@ -6,6 +6,11 @@ import { defineNetwork, InterceptorSource } from 'msw/experimental';
 import * as QUnit from 'qunit';
 
 import { installBeaconShim, removeBeaconShim } from './beacon.ts';
+import {
+  endOpenResponses,
+  installFetchWaiter,
+  removeFetchWaiter,
+} from './fetch-waiter.ts';
 import { settings, type UnhandledPolicy } from './config.ts';
 
 export interface NearMiss {
@@ -158,6 +163,7 @@ export function useHandler(handler: HttpHandler): void {
 
 export function enableNetwork(): void {
   network().enable();
+  installFetchWaiter((url) => !isBypassed(url));
   if (settings().beacons) {
     installBeaconShim();
   }
@@ -165,6 +171,7 @@ export function enableNetwork(): void {
 
 export function disableNetwork(): void {
   removeBeaconShim();
+  removeFetchWaiter();
   network().resetHandlers();
   network().disable();
   forgetPendingRequests();
@@ -184,4 +191,5 @@ export async function settleRequests(): Promise<void> {
     reportFailure(new Error('Requests were still pending when the test ended'));
   }
   forgetPendingRequests();
+  endOpenResponses();
 }

@@ -317,7 +317,7 @@ It registers `index`, `find`, `create`, `update` and `destroy` on the type's URL
 
 ### Waiting for requests
 
-Mocked requests register with a test waiter, so `await settled()`, `click`, `visit` and the other helpers wait for them, including a raw `fetch` from a service. After each test, `settleRequests` waits up to one second for requests still in flight and fails the test if any remain.
+Mocked requests register with a test waiter, so `await settled()`, `click`, `visit` and the other helpers wait for them, including a raw `fetch` from a service. A `fetch` stays pending until the app has read the response body with `json()`, `text()` or another reader, or for two macrotasks if it never reads one. Reading `response.body` as a stream is not tracked. After each test, `settleRequests` waits up to one second for requests still in flight and fails the test if any remain.
 
 ### Beacons
 
