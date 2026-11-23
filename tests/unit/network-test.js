@@ -158,4 +158,36 @@ module('Unit | network', function (hooks) {
       assert.strictEqual(percy.status, 404);
     });
   });
+
+  test('settled() waits for the app to read the response body', async function (assert) {
+    api.get('/value', { x: 42 });
+    api.get('/next', { y: 7 });
+    const state = {};
+
+    (async () => {
+      const response = await fetch(`${API_HOST}/value`);
+      state.value = (await response.json()).x;
+      const next = await fetch(`${API_HOST}/next`);
+      state.next = (await next.json()).y;
+    })();
+    await settled();
+
+    assert.deepEqual(state, { value: 42, next: 7 });
+  });
+
+  test('the waiter stays open while the app reads the response', async function (assert) {
+    api.get('/value', { x: 42 });
+
+    const response = await fetch(`${API_HOST}/value`);
+
+    assert.true(hasPendingWaiters());
+
+    await response.json();
+
+    assert.true(hasPendingWaiters());
+
+    await settled();
+
+    assert.false(hasPendingWaiters());
+  });
 });

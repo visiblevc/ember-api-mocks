@@ -92,6 +92,8 @@ const unhandled = http.all('*', ({ request, requestId }) => {
   );
 });
 
+const nativeSetTimeout = window.setTimeout.bind(window);
+
 interface RequestEvent {
   requestId: string;
   request: Request;
@@ -106,15 +108,21 @@ function startRequest(requestId: string, request: Request): void {
   }
 }
 
-export function finishRequest(requestId: string): void {
+function endRequest(requestId: string): void {
   if (pendingRequests.has(requestId)) {
     waiter.endAsync(pendingRequests.get(requestId));
     pendingRequests.delete(requestId);
   }
 }
 
+export function finishRequest(requestId: string): void {
+  if (pendingRequests.has(requestId)) {
+    nativeSetTimeout(() => nativeSetTimeout(() => endRequest(requestId), 0), 0);
+  }
+}
+
 function forgetPendingRequests(): void {
-  [...pendingRequests.keys()].forEach(finishRequest);
+  [...pendingRequests.keys()].forEach(endRequest);
 }
 
 function createNetwork() {
@@ -163,7 +171,6 @@ export function disableNetwork(): void {
   nearMisses.clear();
 }
 
-const nativeSetTimeout = window.setTimeout.bind(window);
 const SETTLE_LIMIT_MS = 1000;
 
 export async function settleRequests(): Promise<void> {
