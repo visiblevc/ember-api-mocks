@@ -10,7 +10,22 @@ const {
   templateCompatSupport,
 } = require('@embroider/compat/babel');
 
-const macros = buildMacros();
+const { createRequire } = require('node:module');
+
+function configureWarpDrive(config) {
+  let setConfig;
+  try {
+    const requireFromEmberData = createRequire(require.resolve('ember-data'));
+    ({ setConfig } = requireFromEmberData(
+      '@warp-drive/core/cjs-set-config.cjs',
+    ));
+  } catch {
+    return;
+  }
+  setConfig(config, {});
+}
+
+const macros = buildMacros({ configure: configureWarpDrive });
 
 // For scenario testing
 const isCompat = Boolean(process.env.ENABLE_COMPAT_BUILD);

@@ -36,6 +36,18 @@ importers:
       '@babel/runtime':
         specifier: ^7.25.6
         version: 7.29.15
+      '@ember-data/adapter':
+        specifier: ~5.8.0
+        version: 5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1)
+      '@ember-data/model':
+        specifier: ~5.8.0
+        version: 5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1)
+      '@ember-data/serializer':
+        specifier: ~5.8.0
+        version: 5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1)
+      '@ember-data/store':
+        specifier: ~5.8.0
+        version: 5.8.2(@babel/core@7.29.13)(@ember-data/tracking@5.8.2(@babel/core@7.29.13)(@ember/test-waiters@4.1.2)(@glint/template@1.11.1))(@ember/test-waiters@4.1.2)(@glint/template@1.11.1)
       '@ember/app-tsconfig':
         specifier: ^1.0.0
         version: 1.0.3
@@ -81,6 +93,9 @@ importers:
       '@types/qunit':
         specifier: ^2.19.12
         version: 2.19.14
+      active-model-adapter:
+        specifier: ^5.0.0
+        version: 5.0.0(@babel/core@7.29.13)(@ember-data/adapter@5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1))(@ember-data/model@5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1))(@ember-data/serializer@5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1))(@ember-data/store@5.8.2(@babel/core@7.29.13)(@ember-data/tracking@5.8.2(@babel/core@7.29.13)(@ember/test-waiters@4.1.2)(@glint/template@1.11.1))(@ember/test-waiters@4.1.2)(@glint/template@1.11.1))
       babel-plugin-ember-template-compilation:
         specifier: ^4.0.0
         version: 4.0.1
@@ -801,6 +816,9 @@ packages:
 
   '@ember/library-tsconfig@1.1.3':
     resolution: {integrity: sha512-4cKJ38VEcm4mYmontK9BCpQgm5GPLgAeXqd6PqTHD8eKN0GTeegxdX4SsSUN/8emmULq/9H/Oh6fp3vM2mFqkA==}
+
+  '@ember/string@4.0.1':
+    resolution: {integrity: sha512-VWeng8BSWrIsdPfffOQt/bKwNKJL7+37gPFh/6iZZ9bke+S83kKqkS30poo4bTGfRcMnvAE0ie7txom+iDu81Q==}
 
   '@ember/test-helpers@5.8.0':
     resolution: {integrity: sha512-JvQr0F8f5YfhshcG9gpOhZyuCPHFGMnWYaMH0rPf33W2R+CocSdp/aHr7D5wUg9Tl7aBiMJW6yz80MpTPVpTWQ==}
@@ -1710,6 +1728,14 @@ packages:
     resolution: {integrity: sha512-oJlA3XiRm7Cyk6qFD2Jn8ak9B7jSy0qy00ADO3+8dpT0LSjFihQYv4C02LFCSYJV3Q37xYwwRy5m+IpIiUzqWw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  active-model-adapter@5.0.0:
+    resolution: {integrity: sha512-3McS2/GFqtXkxHKa5vuiJFl2VRgwxgVjYzNiHFNqDhuLR/1Li3qfTbD9/Naw9tuFUhyd38EhuYeEWtmnV+tu9Q==}
+    peerDependencies:
+      '@ember-data/adapter': '>=3.24.0'
+      '@ember-data/model': '>=3.24.0'
+      '@ember-data/serializer': '>=3.24.0'
+      '@ember-data/store': '>=3.24.0'
 
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
@@ -6007,6 +6033,8 @@ snapshots:
 
   '@ember/library-tsconfig@1.1.3': {}
 
+  '@ember/string@4.0.1': {}
+
   '@ember/test-helpers@5.8.0(@babel/core@7.29.13)':
     dependencies:
       '@ember/test-waiters': 4.1.2
@@ -7062,6 +7090,19 @@ snapshots:
       acorn: 8.19.0
 
   acorn@8.19.0: {}
+
+  active-model-adapter@5.0.0(@babel/core@7.29.13)(@ember-data/adapter@5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1))(@ember-data/model@5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1))(@ember-data/serializer@5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1))(@ember-data/store@5.8.2(@babel/core@7.29.13)(@ember-data/tracking@5.8.2(@babel/core@7.29.13)(@ember/test-waiters@4.1.2)(@glint/template@1.11.1))(@ember/test-waiters@4.1.2)(@glint/template@1.11.1)):
+    dependencies:
+      '@ember-data/adapter': 5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1)
+      '@ember-data/model': 5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1)
+      '@ember-data/serializer': 5.8.2(@babel/core@7.29.13)(@glint/template@1.11.1)
+      '@ember-data/store': 5.8.2(@babel/core@7.29.13)(@ember-data/tracking@5.8.2(@babel/core@7.29.13)(@ember/test-waiters@4.1.2)(@glint/template@1.11.1))(@ember/test-waiters@4.1.2)(@glint/template@1.11.1)
+      '@ember/string': 4.0.1
+      '@embroider/addon-shim': 1.11.0
+      decorator-transforms: 2.4.0(@babel/core@7.29.13)
+      ember-inflector: 6.0.0(@babel/core@7.29.13)
+    transitivePeerDependencies:
+      - '@babel/core'
 
   agent-base@7.1.4: {}
 
