@@ -43,12 +43,15 @@ export function basicSingularize(word: string): string {
 }
 
 function appInflector(): Inflector {
-  if (macroCondition(dependencySatisfies('ember-inflector', '*'))) {
-    return importSync('ember-inflector') as Inflector;
-  } else if (
-    macroCondition(dependencySatisfies('@ember-data/request-utils', '*'))
+  if (
+    macroCondition(
+      dependencySatisfies('@ember-data/request-utils', '>=5.3.0') ||
+        dependencySatisfies('ember-data', '>=5.3.0'),
+    )
   ) {
     return importSync('@ember-data/request-utils/string') as Inflector;
+  } else if (macroCondition(dependencySatisfies('ember-inflector', '*'))) {
+    return importSync('ember-inflector') as Inflector;
   }
   return { pluralize: basicPluralize, singularize: basicSingularize };
 }

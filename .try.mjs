@@ -28,6 +28,7 @@ function emberData(range) {
     'ember-data': range,
     '@ember-data/adapter': range,
     '@ember-data/model': range,
+    '@ember-data/request-utils': range,
     '@ember-data/serializer': range,
     '@ember-data/store': range,
   };
