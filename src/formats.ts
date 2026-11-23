@@ -39,6 +39,7 @@ export interface Format {
     context: DocumentContext,
   ): Attrs;
   idFromBody(type: string, body: unknown): unknown;
+  attributesFromBody(type: string, body: unknown): Attrs;
 }
 
 type KeyCase = 'snake' | 'camel' | 'dash';
@@ -93,6 +94,11 @@ function bodyRoot(body: unknown, key: string): unknown {
     : undefined;
 }
 
+function rootAttributes(body: unknown, key: string): Attrs {
+  const { id: _id, ...attrs } = (bodyRoot(body, key) ?? {}) as Attrs;
+  return attrs;
+}
+
 export interface ActiveModelOptions {
   path?: (type: string) => string;
 }
@@ -111,6 +117,8 @@ export function activeModel(options: ActiveModelOptions = {}): Format {
     document: sideloadedDocument(rootKey),
     idFromBody: (type, body) =>
       (bodyRoot(body, rootKey(type, false)) as Attrs | undefined)?.id,
+    attributesFromBody: (type, body) =>
+      rootAttributes(body, rootKey(type, false)),
   };
 }
 
@@ -139,6 +147,8 @@ export function rest(options: RestOptions = {}): Format {
     document: sideloadedDocument(rootKey),
     idFromBody: (type, body) =>
       (bodyRoot(body, rootKey(type, false)) as Attrs | undefined)?.id,
+    attributesFromBody: (type, body) =>
+      rootAttributes(body, rootKey(type, false)),
   };
 }
 
@@ -237,5 +247,18 @@ export function jsonApi(options: JsonApiOptions = {}): Format {
 
     idFromBody: (_type, body) =>
       (bodyRoot(body, 'data') as Attrs | undefined)?.id,
+
+    attributesFromBody(_type, body) {
+      const { attributes = {}, relationships = {} } = (bodyRoot(body, 'data') ??
+        {}) as { attributes?: Attrs; relationships?: Attrs };
+      const idOf = (item: unknown): unknown =>
+        (item as Identifier | null)?.id ?? null;
+      const ids: Attrs = {};
+      for (const [key, value] of Object.entries(relationships)) {
+        const linked = (value as { data?: unknown } | null)?.data;
+        ids[key] = Array.isArray(linked) ? linked.map(idOf) : idOf(linked);
+      }
+      return { ...attributes, ...ids };
+    },
   };
 }

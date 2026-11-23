@@ -1,4 +1,4 @@
-import { hasPendingWaiters } from '@ember/test-waiters';
+import { buildWaiter, hasPendingWaiters } from '@ember/test-waiters';
 import { FetchInterceptor } from '@mswjs/interceptors/fetch';
 import { XMLHttpRequestInterceptor } from '@mswjs/interceptors/XMLHttpRequest';
 import { http, HttpResponse, passthrough, type HttpHandler } from 'msw';
@@ -43,10 +43,20 @@ function describeNearMisses(requestId: string): string {
   return (nearMisses.get(requestId) ?? [])
     .map(({ expected, received }) => {
       const actual = Object.fromEntries(
-        Object.keys(expected).map((key) => [
-          key,
-          received[key === 'partialQuery' ? 'query' : key],
-        ]),
+        Object.keys(expected).map((key) => {
+          const value = received[key === 'partialQuery' ? 'query' : key];
+          return [
+            key,
+            key === 'headers'
+              ? Object.fromEntries(
+                  Object.keys(expected.headers as object).map((name) => [
+                    name,
+                    (value as Record<string, string>)[name] ?? null,
+                  ]),
+                )
+              : value,
+          ];
+        }),
       );
       return `\nA handler for this URL expected ${describe(expected)}\nbut received ${describe(actual)}`;
     })
@@ -64,8 +74,14 @@ function applyPolicy(policy: UnhandledPolicy, message: string) {
   return new HttpResponse(null, { status: 404 });
 }
 
+export function isBypassed(url: string): boolean {
+  return (
+    !/^https?:/.test(url) || settings().bypass.includes(new URL(url).origin)
+  );
+}
+
 const unhandled = http.all('*', ({ request, requestId }) => {
-  if (!/^https?:/.test(request.url)) {
+  if (isBypassed(request.url)) {
     return passthrough();
   }
   const { appOrigins, onUnhandledRequest } = settings();
@@ -76,7 +92,30 @@ const unhandled = http.all('*', ({ request, requestId }) => {
   );
 });
 
-const pendingRequests = new Set<string>();
+interface RequestEvent {
+  requestId: string;
+  request: Request;
+}
+
+const waiter = buildWaiter('ember-api-mocks:requests');
+const pendingRequests = new Map<string, unknown>();
+
+function startRequest(requestId: string, request: Request): void {
+  if (!isBypassed(request.url) && !pendingRequests.has(requestId)) {
+    pendingRequests.set(requestId, waiter.beginAsync());
+  }
+}
+
+export function finishRequest(requestId: string): void {
+  if (pendingRequests.has(requestId)) {
+    waiter.endAsync(pendingRequests.get(requestId));
+    pendingRequests.delete(requestId);
+  }
+}
+
+function forgetPendingRequests(): void {
+  [...pendingRequests.keys()].forEach(finishRequest);
+}
 
 function createNetwork() {
   const created = defineNetwork({
@@ -89,11 +128,12 @@ function createNetwork() {
     onUnhandledFrame: 'bypass',
     context: { quiet: true },
   });
-  created.events.on('request:start', (event) =>
-    pendingRequests.add((event as { requestId: string }).requestId),
-  );
+  created.events.on('request:start', (event) => {
+    const { requestId, request } = event as RequestEvent;
+    startRequest(requestId, request);
+  });
   created.events.on('request:end', (event) =>
-    pendingRequests.delete((event as { requestId: string }).requestId),
+    finishRequest((event as RequestEvent).requestId),
   );
   return created;
 }
@@ -119,12 +159,8 @@ export function disableNetwork(): void {
   removeBeaconShim();
   network().resetHandlers();
   network().disable();
-  pendingRequests.clear();
+  forgetPendingRequests();
   nearMisses.clear();
-}
-
-export function finishRequest(requestId: string): void {
-  pendingRequests.delete(requestId);
 }
 
 const nativeSetTimeout = window.setTimeout.bind(window);
@@ -140,5 +176,5 @@ export async function settleRequests(): Promise<void> {
   if (quiet < 2) {
     reportFailure(new Error('Requests were still pending when the test ended'));
   }
-  pendingRequests.clear();
+  forgetPendingRequests();
 }

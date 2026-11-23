@@ -1,10 +1,18 @@
 import { http, HttpResponse } from 'msw';
 
 import { settings } from './config.ts';
-import { factoryOf, formatOf, nextId, payload, urlOf } from './factories.ts';
+import {
+  build,
+  factoryOf,
+  formatOf,
+  nextId,
+  payload,
+  urlOf,
+} from './factories.ts';
 import type { Attrs, BuiltRecord } from './formats.ts';
 import {
   finishRequest,
+  isBypassed,
   nearMisses,
   reportFailure,
   useHandler,
@@ -28,6 +36,7 @@ interface Guard {
   body?: unknown;
   query?: unknown;
   partialQuery?: unknown;
+  headers?: Record<string, unknown>;
 }
 
 const requests: Call[] = [];
@@ -71,6 +80,22 @@ export class Handle {
   withQuery(query: Attrs, { partial = false } = {}): this {
     const { query: _query, partialQuery: _partial, ...where } = this.where;
     this.where = { ...where, [partial ? 'partialQuery' : 'query']: query };
+    return this;
+  }
+
+  withHeaders(headers: Record<string, unknown>): this {
+    this.where = {
+      ...this.where,
+      headers: {
+        ...this.where.headers,
+        ...Object.fromEntries(
+          Object.entries(headers).map(([name, value]) => [
+            name.toLowerCase(),
+            value,
+          ]),
+        ),
+      },
+    };
     return this;
   }
 
@@ -181,11 +206,28 @@ function isSameQuery(expected: unknown, actual: unknown): boolean {
   return text(expected ?? '') === text(actual ?? '');
 }
 
-function matches({ body, query, partialQuery }: Guard, call: Call): boolean {
+function hasHeaders(
+  expected: Record<string, unknown>,
+  headers: Headers,
+): boolean {
+  return Object.entries(expected).every(([name, value]) => {
+    const actual = headers.get(name);
+    if (typeof value === 'function') {
+      return Boolean((value as (header: string | null) => unknown)(actual));
+    }
+    return value == null ? actual === null : actual === text(value);
+  });
+}
+
+function matches(
+  { body, query, partialQuery, headers }: Guard,
+  call: Call,
+): boolean {
   return (
     (body === undefined || isSubset(body, call.body)) &&
     (query === undefined || isSameQuery(query, call.query)) &&
-    (partialQuery === undefined || isSubset(partialQuery, call.query))
+    (partialQuery === undefined || isSubset(partialQuery, call.query)) &&
+    (headers === undefined || hasHeaders(headers, call.headers))
   );
 }
 
@@ -243,7 +285,7 @@ function register(
     params: Call['params'];
     requestId: string;
   }) => {
-    if (handle.removed) {
+    if (handle.removed || isBypassed(request.url)) {
       return undefined;
     }
     const call: Call = {
@@ -257,7 +299,10 @@ function register(
     if (!matches(handle.where, call)) {
       nearMisses.set(requestId, [
         ...(nearMisses.get(requestId) ?? []),
-        { expected: handle.where as Attrs, received: call as unknown as Attrs },
+        {
+          expected: handle.where as Attrs,
+          received: { ...call, headers: Object.fromEntries(call.headers) },
+        },
       ]);
       return undefined;
     }
@@ -285,6 +330,19 @@ function collectionUrl(type: string): string {
   return urlOf(type) ?? `${settings().namespace}${formatOf(type).path(type)}`;
 }
 
+function memberUrl(type: string, id?: unknown): string {
+  return `${collectionUrl(type)}/${id == null ? ':id' : text(id)}`;
+}
+
+export interface Resource {
+  records: BuiltRecord[];
+  index: Handle;
+  find: Handle;
+  create: Handle;
+  update: Handle;
+  destroy: Handle;
+}
+
 interface Target {
   type: string;
   record?: BuiltRecord;
@@ -295,7 +353,11 @@ interface Target {
 function resolve(typeOrRecord: unknown, ...args: unknown[]): Target {
   if (typeof typeOrRecord === 'string') {
     const [recordOrId, ...rest] = args;
-    if (isObject(recordOrId) && !('id' in recordOrId)) {
+    if (
+      typeof recordOrId === 'function' ||
+      recordOrId instanceof Response ||
+      (isObject(recordOrId) && !('id' in recordOrId))
+    ) {
       return { type: typeOrRecord, rest: args };
     }
     const isRecord = isObject(recordOrId);
@@ -351,16 +413,23 @@ export const api = {
   delete: (path: string, response?: ResponseValue) =>
     register('delete', path, response),
 
-  find(typeOrRecord: unknown, recordOrId?: unknown): Handle {
-    const { type, record, id } = resolve(typeOrRecord, recordOrId);
-    const one = (value: unknown, extra?: Attrs) => () =>
-      payload(type, sourceOf(value) as BuiltRecord, extra);
-    const any = ({ params }: Call) => payload(type, { id: params.id });
+  find(typeOrRecord: unknown, ...args: unknown[]): Handle {
+    const { type, record, id, rest } = resolve(typeOrRecord, ...args);
+    const [last] = rest;
+    const raw =
+      typeof last === 'function' || last instanceof Response ? last : undefined;
+    const extra = raw === undefined && isObject(last) ? last : undefined;
+    const one = (value: unknown, more?: Attrs) => () =>
+      payload(type, sourceOf(value) as BuiltRecord, more);
+    const any =
+      (more?: Attrs) =>
+      ({ params }: Call) =>
+        payload(type, { id: id ?? params.id }, more);
 
     return register(
       'get',
-      `${collectionUrl(type)}/${id == null ? ':id' : text(id)}`,
-      record ? one(record) : any,
+      memberUrl(type, id),
+      raw ?? (record ? one(record, extra) : any(extra)),
       one as (...args: unknown[]) => ResponseValue,
     );
   },
@@ -409,18 +478,69 @@ export const api = {
 
     return register(
       formatOf(type).updateMethod,
-      `${collectionUrl(type)}/${id == null ? ':id' : text(id)}`,
+      memberUrl(type, id),
       updated(attrs),
       updated as (...args: unknown[]) => ResponseValue,
     );
   },
 
-  destroy(typeOrRecord: unknown, recordOrId?: unknown): Handle {
-    const { type, id } = resolve(typeOrRecord, recordOrId);
-    return register(
-      'delete',
-      `${collectionUrl(type)}/${id == null ? ':id' : text(id)}`,
-      null,
+  destroy(typeOrRecord: unknown, ...args: unknown[]): Handle {
+    const { type, id, rest } = resolve(typeOrRecord, ...args);
+    return register('delete', memberUrl(type, id), rest[0] ?? null);
+  },
+
+  resource(
+    type: string,
+    records: BuiltRecord[] = [],
+    {
+      filter,
+    }: { filter?: (record: BuiltRecord, query: Attrs) => unknown } = {},
+  ): Resource {
+    const format = formatOf(type);
+    const missing = () => reply(404, {});
+    const lookup = (id: unknown) =>
+      records.find((record) => text(record.id) === text(id));
+
+    const index = register('get', collectionUrl(type), ({ query }: Call) =>
+      payload(
+        type,
+        filter ? records.filter((record) => filter(record, query)) : records,
+      ),
     );
+    const find = register('get', memberUrl(type), ({ params }: Call) => {
+      const record = lookup(params.id);
+      return record ? payload(type, record) : missing();
+    });
+    const create = register('post', collectionUrl(type), ({ body }: Call) => {
+      const id = format.idFromBody(type, body);
+      const record = build(type, {
+        ...format.attributesFromBody(type, body),
+        ...(id == null ? {} : { id }),
+      });
+      records.push(record);
+      return payload(type, record);
+    });
+    const update = register(
+      format.updateMethod,
+      memberUrl(type),
+      ({ params, body }: Call) => {
+        const record = lookup(params.id);
+        if (!record) {
+          return missing();
+        }
+        Object.assign(record, format.attributesFromBody(type, body));
+        return payload(type, record);
+      },
+    );
+    const destroy = register('delete', memberUrl(type), ({ params }: Call) => {
+      const record = lookup(params.id);
+      if (!record) {
+        return missing();
+      }
+      records.splice(records.indexOf(record), 1);
+      return null;
+    });
+
+    return { records, index, find, create, update, destroy };
   },
 };

@@ -13,6 +13,7 @@ export interface Options {
     other?: UnhandledPolicy;
   };
   beacons?: boolean;
+  bypass?: string[];
   pluralize?: (word: string) => string;
   singularize?: (word: string) => string;
 }
@@ -24,6 +25,7 @@ export interface Settings {
   format: Format;
   onUnhandledRequest: { app: UnhandledPolicy; other: UnhandledPolicy };
   beacons: boolean;
+  bypass: string[];
 }
 
 let options: Options = {};
@@ -44,6 +46,13 @@ export function resetConfiguration(): void {
   options = {};
   resolved = undefined;
   setInflector({});
+}
+
+function percyServer(): string {
+  const env = (
+    globalThis as { process?: { env?: Record<string, string | undefined> } }
+  ).process?.env;
+  return env?.PERCY_SERVER_ADDRESS ?? 'http://localhost:5338';
 }
 
 function toUrl(host: string): URL {
@@ -73,6 +82,9 @@ export function settings(): Settings {
       other: options.onUnhandledRequest?.other ?? 'not-found',
     },
     beacons: options.beacons ?? false,
+    bypass: (options.bypass ?? [percyServer()]).map(
+      (origin) => toUrl(origin).origin,
+    ),
   };
   return resolved;
 }

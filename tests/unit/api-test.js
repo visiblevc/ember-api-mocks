@@ -429,4 +429,88 @@ module('Unit | api', function (hooks) {
       assert.deepEqual(this.failures, ['broken handler']);
     });
   });
+
+  test('withHeaders matches header names in any case', async function (assert) {
+    const fallback = api.get('/widgets', { widgets: [] });
+    const authorized = api
+      .get('/widgets', { widgets: [1] })
+      .withHeaders({ Authorization: 'Basic abc', 'X-Version': 2 });
+    const bearer = api
+      .get('/widgets', { widgets: [2] })
+      .withHeaders({ authorization: (value) => value?.startsWith('Bearer ') });
+
+    await fetch(`${API_HOST}/widgets`, {
+      headers: { authorization: 'Basic abc', 'x-version': '2' },
+    });
+    await fetch(`${API_HOST}/widgets`, {
+      headers: { AUTHORIZATION: 'Bearer t' },
+    });
+    await fetch(`${API_HOST}/widgets`, {
+      headers: { authorization: 'Basic other' },
+    });
+
+    assert.strictEqual(authorized.timesCalled, 1);
+    assert.strictEqual(bearer.timesCalled, 1);
+    assert.strictEqual(fallback.timesCalled, 1);
+  });
+
+  test('type shortcuts take a responder instead of an id', async function (assert) {
+    const update = api.update('person', ({ params }) => ({
+      data: { id: params.id, type: 'people', attributes: {} },
+    }));
+    const find = api.find('person', () => reply(410));
+    const destroy = api.destroy('person', () => reply(409));
+
+    const updated = await send('PATCH', '/people/4', {});
+    const found = await send('GET', '/people/4');
+    const destroyed = await send('DELETE', '/people/4');
+
+    assert.deepEqual((await updated.json()).data.id, '4');
+    assert.strictEqual(update.lastCall.url, `${API_HOST}/people/4`);
+    assert.strictEqual(found.status, 410);
+    assert.strictEqual(find.timesCalled, 1);
+    assert.strictEqual(destroyed.status, 409);
+    assert.strictEqual(destroy.timesCalled, 1);
+  });
+
+  test('find takes top-level extra keys', async function (assert) {
+    const company = build('company', { name: 'Acme' });
+    const byRecord = api.find(company, { meta: { role: 'admin' } });
+
+    const first = await (await send('GET', '/companies/1')).json();
+    byRecord.returns(company, { meta: { role: 'viewer' } });
+    const second = await (await send('GET', '/companies/1')).json();
+    api.find('company', 7, { meta: { total: 1 } });
+    const third = await (await send('GET', '/companies/7')).json();
+    api.find('company', { meta: { any: true } });
+    const fourth = await (await send('GET', '/companies/8')).json();
+
+    assert.deepEqual(first.meta, { role: 'admin' });
+    assert.strictEqual(first.company.name, 'Acme');
+    assert.deepEqual(second.meta, { role: 'viewer' });
+    assert.deepEqual(third, { company: { id: 7 }, meta: { total: 1 } });
+    assert.deepEqual(fourth, { company: { id: '8' }, meta: { any: true } });
+  });
+
+  module('header near misses', function (hooks) {
+    collectFailures(hooks);
+
+    test('a near miss on headers shows the received values', async function (assert) {
+      api.get('/widgets', null).withHeaders({ Authorization: 'Basic abc' });
+
+      await fetch(`${API_HOST}/widgets`, {
+        headers: { authorization: 'Basic xyz' },
+      });
+
+      assert.strictEqual(this.failures.length, 1);
+      assert.true(
+        this.failures[0].includes('"authorization": "Basic abc"'),
+        this.failures[0],
+      );
+      assert.true(
+        this.failures[0].includes('"authorization": "Basic xyz"'),
+        this.failures[0],
+      );
+    });
+  });
 });
