@@ -1,4 +1,4 @@
-export { HttpResponse, passthrough } from 'msw';
+export { passthrough } from 'msw';
 
 export { api, reply, type Call, type Handle } from './api.ts';
 export { configure, type Options } from './config.ts';
@@ -23,7 +23,7 @@ export {
   type Format,
   type RestOptions,
 } from './formats.ts';
-export { seed, seedList, seedRecord, sourceOf } from './store.ts';
+export { seed, seedList, seedRecord } from './store.ts';
 export {
   setupApplicationTest,
   setupRenderingTest,

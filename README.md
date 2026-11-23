@@ -252,7 +252,7 @@ api.patch('/settings', null);
 api.delete('https://auth.example.com/sessions', null);
 ```
 
-Paths that start with `/` are joined to `apiHost`, without `namespace`; absolute URLs are used as is. Any other path throws. A response is an object, a function of the call (sync or async), a `Response` (`reply(status, body)`, `reply(status)` for an empty body, or MSW's `HttpResponse`, re-exported here), or `null` for a 204. A model from `seed` inside a plain response is served as its source JSON.
+Paths that start with `/` are joined to `apiHost`, without `namespace`; absolute URLs are used as is. Any other path throws. A response is an object, a function of the call (sync or async), a `Response` (`reply(status, body)`, `reply(status)` for an empty body, or any `Response`), or `null` for a 204. A model from `seed` inside a plain response is served as its source JSON.
 
 ### Handles
 
@@ -353,7 +353,7 @@ api.destroy('user', ({ params }) => {
 - Built ids are numbers (JSON:API documents stringify them) and request bodies carry strings. Compare with `String(record.id)`.
 - A record in a response must come from `build` or `seed`. A record from `store.createRecord` throws; respond with JSON.
 - Requests sent together (`Promise.all`) are matched after their bodies are parsed, so their handlers can run in either order. Assert on each handle's `calls`, not on the order of `api.requests`.
-- `api.query` answers the same payload whatever the query. For paging or search, use `api.get` with a function that returns `payload(type, records.slice(...), { meta })`.
+- `api.query` with a list answers the same payload whatever the query. For paging or search, pass a function that returns `payload(type, records.slice(...), { meta })`.
 - Pluralization comes from `@ember-data/request-utils` 5.3 or later when the app depends on it directly, then `ember-inflector`. Register custom rules where your serializers read them. Without either package the rule is a plain `s`, so give a factory with an irregular plural a `url`.
 - `seed` uses `store.pushPayload`, which ember-data 5 deprecates.
 - Interception uses `defineNetwork` from `msw/experimental`, so `msw` is pinned to an exact version and updated deliberately.

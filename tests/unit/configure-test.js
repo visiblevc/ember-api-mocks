@@ -27,6 +27,19 @@ module('Unit | configure', function (hooks) {
     );
   });
 
+  test('an empty apiHost or origin counts as unset', async function (assert) {
+    resetConfiguration();
+    configure({ apiHost: '', origins: ['', undefined] });
+    const handle = api.get('/widgets', { widgets: [] });
+
+    await fetch('/widgets');
+
+    assert.strictEqual(
+      handle.lastCall.url,
+      `${window.location.origin}/widgets`,
+    );
+  });
+
   test('apiHost with a path prefixes explicit paths', async function (assert) {
     configure({ apiHost: `${API_HOST}/v2/` });
     const handle = api.get('/widgets', { widgets: [] });

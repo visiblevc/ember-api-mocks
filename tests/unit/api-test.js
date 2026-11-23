@@ -4,12 +4,13 @@ import {
   api,
   build,
   buildList,
+  payload,
   reply,
   seed,
   setupTest,
   sideload,
-  sourceOf,
 } from '#src/index.ts';
+import { sourceOf } from '#src/store.ts';
 
 import { API_HOST } from '../config.ts';
 import { collectFailures, send } from '../helpers.js';
@@ -228,6 +229,20 @@ module('Unit | api', function (hooks) {
     assert.deepEqual(empty, { companies: [] });
     assert.deepEqual(one.meta, { total: 1 });
     assert.strictEqual(one.companies.length, 1);
+  });
+
+  test('query takes a responder', async function (assert) {
+    const companies = buildList('company', 3);
+    api.query('company', ({ query }) =>
+      payload('company', companies.slice(0, Number(query.limit)), {
+        meta: { total: companies.length },
+      }),
+    );
+
+    const body = await (await send('GET', '/companies?limit=2')).json();
+
+    assert.strictEqual(body.companies.length, 2);
+    assert.deepEqual(body.meta, { total: 3 });
   });
 
   test('seeded models in a plain response become their JSON', async function (assert) {
