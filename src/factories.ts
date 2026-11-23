@@ -139,6 +139,15 @@ function relate(
   relationships.set(wireKey, { type: association.type, kind });
 }
 
+function idFor(name: string, value: unknown): unknown {
+  if (value instanceof Sequence) {
+    return value.generate(nextId(name));
+  } else if (typeof value === 'function') {
+    return (value as (n: number) => unknown)(nextId(name));
+  }
+  return value ?? nextId(name);
+}
+
 export function build<T extends object = BuiltRecord>(
   name: string,
   ...args: BuildArg[]
@@ -178,11 +187,15 @@ export function build<T extends object = BuiltRecord>(
   }
   Object.assign(attrs, overrides);
 
-  const record: BuiltRecord = { id: attrs.id ?? nextId(name) };
-  if (attrs.id == null) {
+  const generated =
+    attrs.id == null ||
+    attrs.id instanceof Sequence ||
+    typeof attrs.id === 'function';
+  const record: BuiltRecord = { id: idFor(name, attrs.id) };
+  if (generated) {
     autoIds.add(record);
-  } else if (Number.isInteger(attrs.id)) {
-    sequences.set(name, Math.max(sequences.get(name) ?? 0, attrs.id as number));
+  } else if (Number.isInteger(Number(record.id)) && record.id !== '') {
+    sequences.set(name, Math.max(sequences.get(name) ?? 0, Number(record.id)));
   }
 
   const related: Related[] = [];

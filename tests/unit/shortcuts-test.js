@@ -195,6 +195,17 @@ module('Unit | type shortcuts through ember-data', function (hooks) {
       assert.strictEqual(group.id, '12');
     });
 
+    test('create without an id continues after built records', async function (assert) {
+      buildList('person', 2);
+      build('person', { id: '7' });
+      api.create('person');
+      const person = this.store.createRecord('person', { firstName: 'C' });
+
+      await person.save();
+
+      assert.strictEqual(person.id, '8');
+    });
+
     test('create takes a client id from the body', async function (assert) {
       const create = api.create('investor', { name: 'Saved' });
       const investor = this.store.createRecord('investor', {
