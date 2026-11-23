@@ -2,7 +2,13 @@ import { settled } from '@ember/test-helpers';
 import { buildWaiter, hasPendingWaiters } from '@ember/test-waiters';
 import { module, test } from 'qunit';
 
-import { api, configure, HttpResponse, setupTest } from '#src/index.ts';
+import {
+  api,
+  configure,
+  HttpResponse,
+  passthrough,
+  setupTest,
+} from '#src/index.ts';
 import { settleRequests } from '#src/network.ts';
 
 import { API_HOST, configureDefaults } from '../config.ts';
@@ -243,15 +249,12 @@ module('Unit | network', function (hooks) {
   });
 
   test('a fetch that fails releases its waiter', async function (assert) {
-    configure({ onUnhandledRequest: { other: 'passthrough' } });
-    try {
-      await assert.rejects(fetch('http://127.0.0.1:1/down'));
-      await settled();
+    api.get('http://127.0.0.1:1/down', () => passthrough());
 
-      assert.false(hasPendingWaiters());
-    } finally {
-      configureDefaults();
-    }
+    await assert.rejects(fetch('http://127.0.0.1:1/down'));
+    await settled();
+
+    assert.false(hasPendingWaiters());
   });
 
   test("Percy's runtime address is bypassed too", async function (assert) {

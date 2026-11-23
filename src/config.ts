@@ -1,21 +1,12 @@
 import { jsonApi, type Format } from './formats.ts';
-import { setInflector } from './inflection.ts';
-
-export type UnhandledPolicy = 'error' | 'warn' | 'not-found' | 'passthrough';
 
 export interface Options {
   apiHost?: string;
   namespace?: string;
   origins?: string[];
   format?: Format;
-  onUnhandledRequest?: {
-    app?: UnhandledPolicy;
-    other?: UnhandledPolicy;
-  };
   beacons?: boolean;
   bypass?: string[];
-  pluralize?: (word: string) => string;
-  singularize?: (word: string) => string;
 }
 
 export interface Settings {
@@ -23,7 +14,6 @@ export interface Settings {
   namespace: string;
   appOrigins: string[];
   format: Format;
-  onUnhandledRequest: { app: UnhandledPolicy; other: UnhandledPolicy };
   beacons: boolean;
   bypass: string[];
   bypassPercy: boolean;
@@ -35,18 +25,11 @@ let resolved: Settings | undefined;
 export function configure(next: Options): void {
   options = { ...options, ...next };
   resolved = undefined;
-  if (next.pluralize || next.singularize) {
-    setInflector({
-      pluralize: options.pluralize,
-      singularize: options.singularize,
-    });
-  }
 }
 
 export function resetConfiguration(): void {
   options = {};
   resolved = undefined;
-  setInflector({});
 }
 
 const PERCY_DEFAULT = 'http://localhost:5338';
@@ -86,10 +69,6 @@ export function settings(): Settings {
       ]),
     ],
     format: options.format ?? jsonApi(),
-    onUnhandledRequest: {
-      app: options.onUnhandledRequest?.app ?? 'error',
-      other: options.onUnhandledRequest?.other ?? 'not-found',
-    },
     beacons: options.beacons ?? false,
     bypass: (options.bypass ?? []).map((origin) => toUrl(origin).origin),
     bypassPercy: options.bypass === undefined,

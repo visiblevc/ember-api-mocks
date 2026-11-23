@@ -72,7 +72,7 @@ import {
 } from '@visiblevc/ember-api-mocks';
 ```
 
-If your app has its own wrappers in `tests/helpers`, wrap those instead: `withApi(setup)` returns the same setup function with mocking on, and `setupApi(hooks)` only turns mocking on and off around each test.
+If your app has its own wrappers in `tests/helpers`, call these from them.
 
 ### `configure` options
 
@@ -82,10 +82,8 @@ If your app has its own wrappers in `tests/helpers`, wrap those instead: `withAp
 | `namespace` | `''` | Prefix for type shortcut URLs only (`api/v1`). |
 | `format` | `jsonApi()` | Default wire format. A factory can override it. |
 | `origins` | `[]` | More origins that count as your app (a CDN, a second API). |
-| `onUnhandledRequest` | `{ app: 'error', other: 'not-found' }` | What happens to a request no mock answers. See [Unhandled requests](#unhandled-requests). |
 | `bypass` | Percy's local server | Origins that always reach the network untouched. By default that is Percy's server, read from `@percy/sdk-utils` at request time (`http://localhost:5338` unless Percy says otherwise). Setting `bypass` replaces the default, so list Percy's address yourself if you need both. |
 | `beacons` | `false` | Send `navigator.sendBeacon` through `fetch` so mocks can answer it. |
-| `pluralize`, `singularize` | the app's inflector | Override pluralization. |
 
 `configure` merges with earlier calls. Settings are read when the first test runs.
 
@@ -112,7 +110,7 @@ configure({
 // GET /shared_decks/1 -> { shared_deck: { id: 1, title: 'Q3', owner: 2 } }
 ```
 
-JSON:API: `{ data, included }`, plural dasherized types, string ids, `PATCH`. A relationship's `data` is written only when the related records are in the document, as jsonapi-resources does; `jsonApi({ linkage: 'always' })` writes it for every relationship.
+JSON:API: `{ data, included }`, plural dasherized types, string ids, `PATCH`. A relationship's `data` is written only when the related records are in the document, as jsonapi-resources does.
 
 ```js
 configure({ format: jsonApi() });
@@ -168,7 +166,7 @@ defineFactory('subscription', {
 - `build(name, ...traits, overrides)` returns a plain JSON record with an `id`. `buildList(name, 3, ...traits, overrides)` returns three; without a count, each argument describes one record: `buildList('user', { name: 'A' }, ['admin', { name: 'B' }])`.
 - Ids count up from 1 per factory and restart for every test. An explicit id (`{ id: 5 }` or `{ id: '5' }`) moves the counter past it. For string or uuid ids, set `default.id` to a `sequence((n) => ...)` or a function of `n`.
 - Defaults are copied per record. A function value is called with the record once the other values are set.
-- `transient` values are options, not attributes. Read them with `transientOf(record)` or in `afterSeed`.
+- `transient` values are options, not attributes. Read them in `afterSeed`.
 - An override key in the wrong case for the format throws (`planId` for ActiveModel, `plan_id` for JSON:API). The serializer would ignore it and the test would run on the wrong data.
 
 ### Relationships
@@ -222,12 +220,7 @@ test('shows the plan', async function (assert) {
 - Factories can define `beforeSeed(record, store)` and `afterSeed(model, transient)` hooks. They run for `seed` only.
 - In TypeScript, pass the type: `seed<Company>('company')`, `build<CompanyJson>('company')`.
 - For a new, unsaved record, use `store.createRecord`.
-
-With ember-data-model-fragments, import the subpath once in `tests/test-helper.js` so fragment factories seed fragments:
-
-```js
-import '@visiblevc/ember-api-mocks/model-fragments';
-```
+- With ember-data-model-fragments installed, `seed` on a fragment factory returns a fragment.
 
 ## Acceptance tests: `build` and `api`
 
@@ -288,18 +281,11 @@ The newest mock for a URL answers first. A mock whose guard does not fit is skip
 
 ### Unhandled requests
 
-| Policy | Effect |
-| --- | --- |
-| `'error'` | 404, and the test fails with `No handler for GET https://...` plus what any near-miss guard expected and received |
-| `'warn'` | 404 and a console warning |
-| `'not-found'` | 404 |
-| `'passthrough'` | the real request goes out |
-
-`onUnhandledRequest.app` covers the page origin, `apiHost` and `origins` (default `'error'`); `.other` covers everything else (default `'not-found'`). Non-http URLs (`data:`, `blob:`) and `bypass` origins always go out untouched.
+A request no mock answers gets a 404. For the page origin, `apiHost` and `origins`, the test also fails with `No handler for GET https://...` plus what any near-miss guard expected and received. Non-http URLs (`data:`, `blob:`) and `bypass` origins always go out untouched. To let one request reach the network, answer it with `passthrough()`: `api.get(url, () => passthrough())`.
 
 ### Waiting for requests
 
-Mocked requests register with a test waiter, so `await settled()`, `click`, `visit` and the other helpers wait for them, including a raw `fetch` from a service. A `fetch` stays pending until the app has read the response body with `json()`, `text()` or another reader, or for two macrotasks if it never reads one. Reading `response.body` as a stream is not tracked. After each test, `settleRequests` waits up to one second for requests still in flight and fails the test if any remain.
+Mocked requests register with a test waiter, so `await settled()`, `click`, `visit` and the other helpers wait for them, including a raw `fetch` from a service. A `fetch` stays pending until the app has read the response body with `json()`, `text()` or another reader, or for two macrotasks if it never reads one. Reading `response.body` as a stream is not tracked. After each test, the setup functions wait up to one second for requests and other test waiters still pending, and fail the test if any remain.
 
 ### Beacons
 
@@ -339,7 +325,7 @@ With `configure({ beacons: true })`, `navigator.sendBeacon` goes through `fetch`
 | `new Response(422, {}, errors)` | `reply(422, errors)` |
 | `server.pretender.handledRequests` | `api.requests`, `handle.calls` |
 | factory `afterCreate` | a trait function, or `afterSeed` for `seed` |
-| `this.passthrough()` | `onUnhandledRequest: { other: 'passthrough' }`, or `passthrough()` from a responder |
+| `this.passthrough()` | `passthrough()` from a responder |
 
 Where Mirage kept state in its ORM, keep built records in the test and let responders read and change them:
 
@@ -370,14 +356,10 @@ api.destroy('user', ({ params }) => {
 - Requests sent together (`Promise.all`) are matched after their bodies are parsed, so their handlers can run in either order. Assert on each handle's `calls`, not on the order of `api.requests`.
 - A `sequence` advances only when the default value is used. For names that follow the id, as in Mirage's `(i) => ...`, use a function of the record: `` name: ({ id }) => `User ${id}` ``.
 - `api.query` answers the same payload whatever the query. For paging or search, use `api.get` with a function that returns `payload(type, records.slice(...), { meta })`.
-- JSON:API responses leave out linkage to records outside the document unless `linkage: 'always'`. `seed` always writes linkage.
-- Pluralization comes from `@ember-data/request-utils` on ember-data 5.3 and later, then `ember-inflector`, then built-in rules. Register custom rules where your serializers read them, or pass `configure({ pluralize, singularize })`.
+- JSON:API responses leave out linkage to records outside the document. `seed` always writes linkage.
+- Pluralization comes from `@ember-data/request-utils` 5.3 or later when the app depends on it directly, then `ember-inflector`. Register custom rules where your serializers read them. Without either package the rule is a plain `s`, so give a factory with an irregular plural a `url`.
 - `seed` uses `store.pushPayload`, which ember-data 5 deprecates.
 - Interception uses `defineNetwork` from `msw/experimental`, so `msw` is pinned to an exact version and updated deliberately.
-
-### Custom formats
-
-A format is an object with `name`, `updateMethod`, `keyError(key)`, `relationshipKey(key, kind)`, `path(type)`, `document(type, data, extra, context)` and `idFromBody(type, body)`. Start from one of the built-ins.
 
 ## Contributing
 

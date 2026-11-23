@@ -94,11 +94,7 @@ function bodyRoot(body: unknown, key: string): unknown {
     : undefined;
 }
 
-export interface ActiveModelOptions {
-  path?: (type: string) => string;
-}
-
-export function activeModel(options: ActiveModelOptions = {}): Format {
+export function activeModel(): Format {
   const rootKey = (type: string, plural: boolean) =>
     plural ? pluralize(underscore(type)) : underscore(type);
 
@@ -109,7 +105,7 @@ export function activeModel(options: ActiveModelOptions = {}): Format {
     keyError: (key) => keyError('snake', key),
     relationshipKey: (key, kind) =>
       kind === 'belongsTo' ? `${key}_id` : `${singularize(key)}_ids`,
-    path: options.path ?? ((type) => `/${rootKey(type, true)}`),
+    path: (type) => `/${rootKey(type, true)}`,
     document: sideloadedDocument(rootKey),
     idFromBody: (type, body) =>
       (bodyRoot(body, rootKey(type, false)) as Attrs | undefined)?.id,
@@ -145,18 +141,12 @@ export function rest(options: RestOptions = {}): Format {
   };
 }
 
-export interface JsonApiOptions {
-  linkage?: 'included' | 'always';
-  path?: (type: string) => string;
-}
-
 interface Identifier {
   type: string;
   id: string;
 }
 
-export function jsonApi(options: JsonApiOptions = {}): Format {
-  const linkage = options.linkage ?? 'included';
+export function jsonApi(): Format {
   const resourceType = (type: string) => pluralize(dasherize(type));
 
   const identifier = (type: string, value: unknown): Identifier => {
@@ -185,7 +175,7 @@ export function jsonApi(options: JsonApiOptions = {}): Format {
     separatesRelationships: true,
     keyError: (key) => keyError('dash', key),
     relationshipKey: (key) => key,
-    path: options.path ?? ((type) => `/${resourceType(type)}`),
+    path: (type) => `/${resourceType(type)}`,
 
     document(type, data, extra, context) {
       const many = Array.isArray(data);
@@ -212,7 +202,7 @@ export function jsonApi(options: JsonApiOptions = {}): Format {
             continue;
           }
           const linked = toLinkage(relationship, value);
-          if (linkage === 'always' || context.seeding || isPresent(linked)) {
+          if (context.seeding || isPresent(linked)) {
             relationships[key] = { data: linked };
           }
         }

@@ -1,6 +1,5 @@
 import { module, test } from 'qunit';
 
-import '#src/model-fragments.ts';
 import {
   build,
   buildList,

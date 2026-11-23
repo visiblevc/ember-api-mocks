@@ -16,7 +16,7 @@ import {
   removeFetchWaiter,
   unwrapStaleFetch,
 } from './fetch-waiter.ts';
-import { percyOrigin, settings, type UnhandledPolicy } from './config.ts';
+import { percyOrigin, settings } from './config.ts';
 
 export interface NearMiss {
   expected: Record<string, unknown>;
@@ -73,17 +73,6 @@ function describeNearMisses(requestId: string): string {
     .join('');
 }
 
-function applyPolicy(policy: UnhandledPolicy, message: string) {
-  if (policy === 'passthrough') {
-    return passthrough();
-  } else if (policy === 'error') {
-    reportFailure(new Error(message));
-  } else if (policy === 'warn') {
-    console.warn(message);
-  }
-  return new HttpResponse(null, { status: 404 });
-}
-
 export function isBypassed(url: string): boolean {
   if (!/^https?:/.test(url)) {
     return true;
@@ -97,12 +86,14 @@ const unhandled = http.all('*', ({ request, requestId }) => {
   if (isBypassed(request.url)) {
     return passthrough();
   }
-  const { appOrigins, onUnhandledRequest } = settings();
-  const isApp = appOrigins.includes(new URL(request.url).origin);
-  return applyPolicy(
-    isApp ? onUnhandledRequest.app : onUnhandledRequest.other,
-    `No handler for ${request.method} ${request.url}${describeNearMisses(requestId)}`,
-  );
+  if (settings().appOrigins.includes(new URL(request.url).origin)) {
+    reportFailure(
+      new Error(
+        `No handler for ${request.method} ${request.url}${describeNearMisses(requestId)}`,
+      ),
+    );
+  }
+  return new HttpResponse(null, { status: 404 });
 });
 
 const nativeSetTimeout = window.setTimeout.bind(window);

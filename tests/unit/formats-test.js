@@ -15,8 +15,8 @@ import {
   sequence,
   setupTest,
   sideload,
-  transientOf,
 } from '#src/index.ts';
+import { transientOf } from '#src/factories.ts';
 
 module('Unit | formats', function (hooks) {
   setupTest(hooks);
@@ -275,33 +275,6 @@ module('Unit | formats', function (hooks) {
       assert.deepEqual(payload('investor', cleared).data.relationships, {
         group: { data: null },
         people: { data: [] },
-      });
-    });
-
-    test('linkage always is emitted with linkage: always', function (assert) {
-      defineFactory('linked-investor', {
-        format: jsonApi({ linkage: 'always' }),
-        relationships: {
-          group: belongsTo('investor-group'),
-          people: hasMany('person'),
-        },
-      });
-
-      const investor = build('linked-investor', { group: 9, people: [1, 2] });
-
-      assert.deepEqual(payload('linked-investor', investor).data, {
-        id: '1',
-        type: 'linked-investors',
-        attributes: {},
-        relationships: {
-          group: { data: { type: 'investor-groups', id: '9' } },
-          people: {
-            data: [
-              { type: 'people', id: '1' },
-              { type: 'people', id: '2' },
-            ],
-          },
-        },
       });
     });
 

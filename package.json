@@ -29,10 +29,6 @@
       "types": "./declarations/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./model-fragments": {
-      "types": "./declarations/model-fragments.d.ts",
-      "default": "./dist/model-fragments.js"
-    },
     "./addon-main.js": "./addon-main.cjs"
   },
   "files": [

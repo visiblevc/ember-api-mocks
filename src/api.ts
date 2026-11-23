@@ -39,69 +39,16 @@ interface Guard {
 
 const requests: Call[] = [];
 
-export class Handle {
-  calls: Call[] = [];
-  removed = false;
-  where: Guard = {};
-
-  constructor(
-    public response: ResponseValue,
-    private readonly toResponse?: (...args: unknown[]) => ResponseValue,
-  ) {}
-
-  get timesCalled(): number {
-    return this.calls.length;
-  }
-
-  get lastCall(): Call {
-    return this.calls.at(-1) as Call;
-  }
-
-  returns(...args: Arg[]): this {
-    const [value] = args;
-    const isRaw = value instanceof Response || typeof value === 'function';
-    this.response =
-      this.toResponse && !isRaw
-        ? this.toResponse(...args)
-        : (value as ResponseValue);
-    return this;
-  }
-
-  fails(status = 500, body: unknown = {}): this {
-    this.response = reply(status, body);
-    return this;
-  }
-
-  match(body: object | ((body: Json) => unknown)): this {
-    this.where = { ...this.where, body };
-    return this;
-  }
-
-  withQuery(query: Attrs, { partial = false } = {}): this {
-    const { query: _query, partialQuery: _partial, ...where } = this.where;
-    this.where = { ...where, [partial ? 'partialQuery' : 'query']: query };
-    return this;
-  }
-
-  withHeaders(headers: Record<string, HeaderValue>): this {
-    this.where = {
-      ...this.where,
-      headers: {
-        ...this.where.headers,
-        ...Object.fromEntries(
-          Object.entries(headers).map(([name, value]) => [
-            name.toLowerCase(),
-            value,
-          ]),
-        ),
-      },
-    };
-    return this;
-  }
-
-  remove(): void {
-    this.removed = true;
-  }
+export interface Handle {
+  readonly calls: Call[];
+  readonly timesCalled: number;
+  readonly lastCall: Call;
+  returns(...args: Arg[]): Handle;
+  fails(status?: number, body?: unknown): Handle;
+  match(body: object | ((body: Json) => unknown)): Handle;
+  withQuery(query: Attrs, options?: { partial?: boolean }): Handle;
+  withHeaders(headers: Record<string, HeaderValue>): Handle;
+  remove(): void;
 }
 
 function parseEntries(entries: Iterable<[string, unknown]>): Attrs {
@@ -286,10 +233,62 @@ export function absoluteUrl(path: string): string {
 function register(
   method: Method,
   path: string,
-  response: ResponseValue,
+  initial: ResponseValue,
   toPayload?: (...args: unknown[]) => ResponseValue,
 ): Handle {
-  const handle = new Handle(response, toPayload);
+  const url = absoluteUrl(path);
+  const calls: Call[] = [];
+  let response = initial;
+  let removed = false;
+  let where: Guard = {};
+
+  const handle: Handle = {
+    calls,
+    get timesCalled() {
+      return calls.length;
+    },
+    get lastCall() {
+      return calls.at(-1) as Call;
+    },
+    returns(...args) {
+      const [value] = args;
+      const isRaw = value instanceof Response || typeof value === 'function';
+      response =
+        toPayload && !isRaw ? toPayload(...args) : (value as ResponseValue);
+      return handle;
+    },
+    fails(status = 500, body = {}) {
+      response = reply(status, body);
+      return handle;
+    },
+    match(body) {
+      where = { ...where, body };
+      return handle;
+    },
+    withQuery(query, { partial = false } = {}) {
+      const { query: _query, partialQuery: _partial, ...rest } = where;
+      where = { ...rest, [partial ? 'partialQuery' : 'query']: query };
+      return handle;
+    },
+    withHeaders(headers) {
+      where = {
+        ...where,
+        headers: {
+          ...where.headers,
+          ...Object.fromEntries(
+            Object.entries(headers).map(([name, value]) => [
+              name.toLowerCase(),
+              value,
+            ]),
+          ),
+        },
+      };
+      return handle;
+    },
+    remove() {
+      removed = true;
+    },
+  };
 
   const respond = async ({
     request,
@@ -300,7 +299,7 @@ function register(
     params: Call['params'];
     requestId: string;
   }) => {
-    if (handle.removed || isBypassed(request.url)) {
+    if (removed || isBypassed(request.url)) {
       return undefined;
     }
     const call: Call = {
@@ -311,23 +310,23 @@ function register(
       body: await parseBody(request),
       headers: request.headers,
     };
-    if (!matches(handle.where, call)) {
+    if (!matches(where, call)) {
       nearMisses.set(requestId, [
         ...(nearMisses.get(requestId) ?? []),
         {
-          expected: handle.where as Attrs,
+          expected: where as Attrs,
           received: { ...call, headers: Object.fromEntries(call.headers) },
         },
       ]);
       return undefined;
     }
-    handle.calls.push(call);
+    calls.push(call);
     requests.push(call);
-    return toResponse(handle.response, call);
+    return toResponse(response, call);
   };
 
   useHandler(
-    http[method](absoluteUrl(path), async (info) => {
+    http[method](url, async (info) => {
       try {
         return await respond(info);
       } catch (failure) {

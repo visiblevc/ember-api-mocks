@@ -1,4 +1,9 @@
 import { getContext } from '@ember/test-helpers';
+import {
+  dependencySatisfies,
+  importSync,
+  macroCondition,
+} from '@embroider/macros';
 
 import {
   build,
@@ -30,31 +35,32 @@ interface Serializer {
   keyForRelationship(name: string, kind: string, method: string): string;
 }
 
-export interface Store {
+interface Store {
   modelFor(name: string): ModelClass;
-  serializerFor(name: string): Serializer;
+  serializerFor(name: string): Serializer & {
+    normalize(
+      modelClass: ModelClass,
+      hash: Attrs,
+    ): { data: { attributes: Attrs } };
+  };
   pushPayload(name: string, payload: unknown): void;
   peekRecord(name: string, id: string): unknown;
+  createFragment?(name: string, attributes: Attrs): Attrs;
 }
 
-export interface Seeder {
-  handles(modelClass: ModelClass): boolean;
-  seed(
-    store: Store,
-    name: string,
-    modelClass: ModelClass,
-    record: BuiltRecord,
-  ): unknown;
-}
-
-const seeders: Seeder[] = [];
 const sources = new WeakMap<object, BuiltRecord>();
 
-export function registerSeeder(seeder: Seeder): void {
-  seeders.push(seeder);
+function isFragment(modelClass: ModelClass): boolean {
+  if (macroCondition(dependencySatisfies('ember-data-model-fragments', '*'))) {
+    const { default: Fragment } = importSync(
+      'ember-data-model-fragments/fragment',
+    ) as { default: abstract new () => object };
+    return modelClass.prototype instanceof Fragment;
+  }
+  return false;
 }
 
-export function attributeKeys(
+function attributeKeys(
   serializer: Serializer,
   modelClass: ModelClass,
 ): Set<string> {
@@ -133,12 +139,30 @@ function currentStore(): Store {
   return context.owner.lookup('service:store') as Store;
 }
 
+function pushFragment(
+  store: Store,
+  name: string,
+  modelClass: ModelClass,
+  record: BuiltRecord,
+): unknown {
+  const serializer = store.serializerFor(name);
+  const { id: _id, ...attrs } = record;
+  const { data } = serializer.normalize(modelClass, attrs);
+  const fragment = store.createFragment!(name, data.attributes);
+  const known = attributeKeys(serializer, modelClass);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (!known.has(key)) {
+      fragment[key] = value;
+    }
+  }
+  return fragment;
+}
+
 function push(name: string, record: BuiltRecord): unknown {
   const store = currentStore();
   const modelClass = store.modelFor(name);
-  const seeder = seeders.find((candidate) => candidate.handles(modelClass));
-  if (seeder) {
-    return seeder.seed(store, name, modelClass, record);
+  if (isFragment(modelClass)) {
+    return pushFragment(store, name, modelClass, record);
   }
   rejectUnusedOverrides(
     name,

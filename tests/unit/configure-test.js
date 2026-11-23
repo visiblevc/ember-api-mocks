@@ -104,57 +104,6 @@ module('Unit | configure', function (hooks) {
     assert.strictEqual(this.failures.length, 1);
   });
 
-  test('unhandled app requests can warn', async function (assert) {
-    configure({ onUnhandledRequest: { app: 'warn' } });
-    const warnings = [];
-    const { warn } = console;
-    console.warn = (message) => warnings.push(message);
-    try {
-      const response = await send('GET', '/widgets');
-
-      assert.strictEqual(response.status, 404);
-    } finally {
-      console.warn = warn;
-    }
-
-    assert.deepEqual(this.failures, []);
-    assert.deepEqual(warnings, [`No handler for GET ${API_HOST}/widgets`]);
-  });
-
-  test('unhandled app requests can get a quiet 404', async function (assert) {
-    configure({ onUnhandledRequest: { app: 'not-found' } });
-
-    const response = await send('GET', '/widgets');
-
-    assert.strictEqual(response.status, 404);
-    assert.deepEqual(this.failures, []);
-  });
-
-  test('unhandled app requests can pass through', async function (assert) {
-    configure({ onUnhandledRequest: { app: 'passthrough' } });
-
-    const response = await fetch('/testem.js');
-
-    assert.strictEqual(response.status, 200);
-    assert.deepEqual(this.failures, []);
-  });
-
-  test('unhandled third-party requests can fail the test', async function (assert) {
-    configure({ onUnhandledRequest: { other: 'error' } });
-
-    const response = await fetch('https://third-party.example/widgets');
-
-    assert.strictEqual(response.status, 404);
-    assert.strictEqual(this.failures.length, 1);
-  });
-
-  test('unhandled third-party requests can pass through', async function (assert) {
-    configure({ onUnhandledRequest: { other: 'passthrough' } });
-
-    await assert.rejects(fetch('http://127.0.0.1:1/widgets'));
-    assert.deepEqual(this.failures, []);
-  });
-
   test('non-http requests always pass through', async function (assert) {
     const response = await fetch('data:application/json,{"a":1}');
 

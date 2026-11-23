@@ -10,21 +10,16 @@ import { disableNetwork, enableNetwork, settleRequests } from './network.ts';
 
 type Setup = (hooks: NestedHooks, options?: object) => void;
 
-export function setupApi(hooks: NestedHooks): void {
-  hooks.beforeEach(function () {
-    resetSequences();
-    enableNetwork();
-  });
-
-  hooks.afterEach(function () {
-    disableNetwork();
-    clearRequests();
-  });
-}
-
-export function withApi(setup: Setup): Setup {
+function withApi(setup: Setup): Setup {
   return function (hooks, options) {
-    setupApi(hooks);
+    hooks.beforeEach(function () {
+      resetSequences();
+      enableNetwork();
+    });
+    hooks.afterEach(function () {
+      disableNetwork();
+      clearRequests();
+    });
     setup(hooks, options);
     hooks.afterEach(settleRequests);
   };
@@ -33,5 +28,3 @@ export function withApi(setup: Setup): Setup {
 export const setupApplicationTest = withApi(upstreamSetupApplicationTest);
 export const setupRenderingTest = withApi(upstreamSetupRenderingTest);
 export const setupTest = withApi(upstreamSetupTest);
-
-export { settleRequests };

@@ -6,30 +6,10 @@ import {
 import { module, test } from 'qunit';
 import Inflector from 'ember-inflector';
 
-import { activeModel, configure, jsonApi, rest } from '#src/index.ts';
-import { basicPluralize, basicSingularize } from '#src/inflection.ts';
+import { activeModel, jsonApi, rest } from '#src/index.ts';
 
-import { configureDefaults } from '../config.ts';
-
-module('Unit | inflection', function (hooks) {
-  hooks.afterEach(function () {
-    configureDefaults();
-  });
-
-  test('configure({ pluralize, singularize }) wins', function (assert) {
-    configure({
-      pluralize: (word) => `${word}z`,
-      singularize: (word) => word.replace(/z$/, ''),
-    });
-
-    assert.strictEqual(jsonApi().path('company'), '/companyz');
-    assert.strictEqual(
-      activeModel().relationshipKey('tagz', 'hasMany'),
-      'tag_ids',
-    );
-  });
-
-  test("the app's inflection rules come next", function (assert) {
+module('Unit | inflection', function () {
+  test("paths follow the app's inflection rules", function (assert) {
     if (
       macroCondition(
         dependencySatisfies('@ember-data/request-utils', '>=5.3.0'),
@@ -54,21 +34,6 @@ module('Unit | inflection', function (hooks) {
     assert.strictEqual(
       activeModel().relationshipKey('people', 'hasMany'),
       'person_ids',
-    );
-  });
-
-  test('the basic rules are the last resort', function (assert) {
-    assert.deepEqual(
-      ['company', 'box', 'church', 'day', 'person', 'widget'].map(
-        basicPluralize,
-      ),
-      ['companies', 'boxes', 'churches', 'days', 'people', 'widgets'],
-    );
-    assert.deepEqual(
-      ['companies', 'boxes', 'churches', 'days', 'people', 'widgets'].map(
-        basicSingularize,
-      ),
-      ['company', 'box', 'church', 'day', 'person', 'widget'],
     );
   });
 });
