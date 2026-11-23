@@ -428,7 +428,11 @@ export const api = {
     );
   },
 
-  query(type: string, records: unknown[] = [], extra: Attrs = {}): Handle {
+  query(
+    type: string,
+    records: unknown[] | Responder | Response = [],
+    extra: Attrs = {},
+  ): Handle {
     const many =
       (list: unknown[] = [], more: Attrs = {}) =>
       () =>
@@ -437,7 +441,7 @@ export const api = {
     return register(
       'get',
       collectionUrl(type),
-      many(records, extra),
+      Array.isArray(records) ? many(records, extra) : records,
       many as (...args: unknown[]) => ResponseValue,
     );
   },

@@ -1,9 +1,9 @@
 import { jsonApi, type Format } from './formats.ts';
 
 export interface Options {
-  apiHost?: string;
+  apiHost?: string | null;
   namespace?: string;
-  origins?: string[];
+  origins?: (string | null | undefined)[];
   format?: Format;
   beacons?: boolean;
   bypass?: string[];
@@ -55,7 +55,7 @@ export function settings(): Settings {
   if (resolved) {
     return resolved;
   }
-  const api = toUrl(options.apiHost ?? window.location.origin);
+  const api = toUrl(options.apiHost || window.location.origin);
   resolved = {
     apiBase: `${api.origin}${api.pathname}`.replace(/\/$/, ''),
     namespace: (options.namespace ?? '')
@@ -65,7 +65,9 @@ export function settings(): Settings {
       ...new Set([
         window.location.origin,
         api.origin,
-        ...(options.origins ?? []).map((origin) => toUrl(origin).origin),
+        ...(options.origins ?? [])
+          .filter((origin): origin is string => Boolean(origin))
+          .map((origin) => toUrl(origin).origin),
       ]),
     ],
     format: options.format ?? jsonApi(),
