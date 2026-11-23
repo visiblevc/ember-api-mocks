@@ -19,7 +19,9 @@ interface Pending {
 }
 
 const open = new Set<Pending>();
-let patchedFetch: typeof fetch | undefined;
+let installed:
+  | { wrapper: typeof fetch; inner: typeof fetch; state: WrapperState }
+  | undefined;
 
 function end(pending: Pending): void {
   if (!pending.ended) {
@@ -67,13 +69,47 @@ function urlOf(input: RequestInfo | URL): string | undefined {
     : undefined;
 }
 
-export function installFetchWaiter(tracks: (url: string) => boolean): void {
-  if (patchedFetch) {
+interface WrapperState {
+  original: typeof fetch;
+  active: boolean;
+}
+
+const WRAPPER = Symbol.for('ember-api-mocks.fetch');
+
+function stateOf(value: unknown): WrapperState | undefined {
+  return typeof value === 'function'
+    ? (value as { [WRAPPER]?: WrapperState })[WRAPPER]
+    : undefined;
+}
+
+export function unwrapStaleFetch(): void {
+  let current = globalThis.fetch;
+  for (
+    let state = stateOf(current);
+    state && !state.active;
+    state = stateOf(current)
+  ) {
+    current = state.original;
+  }
+  if (current !== globalThis.fetch) {
+    globalThis.fetch = current;
+  }
+}
+
+export function installFetchWaiter(
+  original: typeof fetch,
+  tracks: (url: string) => boolean,
+): void {
+  if (installed) {
     return;
   }
   const inner = globalThis.fetch;
-  patchedFetch = inner;
-  globalThis.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
+  const state: WrapperState = { original, active: true };
+  const wrapper = function (input: RequestInfo | URL, init?: RequestInit) {
+    if (!state.active) {
+      const passThrough = state.original;
+      return passThrough(input, init);
+    }
     const url = urlOf(input);
     if (url === undefined || !tracks(url)) {
       return inner(input, init);
@@ -104,6 +140,9 @@ export function installFetchWaiter(tracks: (url: string) => boolean): void {
       },
     );
   };
+  Object.defineProperty(wrapper, WRAPPER, { value: state });
+  installed = { wrapper, inner, state };
+  globalThis.fetch = wrapper;
 }
 
 export function endOpenResponses(): void {
@@ -111,9 +150,12 @@ export function endOpenResponses(): void {
 }
 
 export function removeFetchWaiter(): void {
-  if (patchedFetch) {
-    globalThis.fetch = patchedFetch;
-    patchedFetch = undefined;
+  if (installed) {
+    installed.state.active = false;
+    if (globalThis.fetch === installed.wrapper) {
+      globalThis.fetch = installed.inner;
+    }
+    installed = undefined;
   }
   endOpenResponses();
 }

@@ -363,6 +363,7 @@ With `configure({ beacons: true })`, `navigator.sendBeacon` goes through `fetch`
 
 - Only `fetch` and `XMLHttpRequest` are intercepted. `<img>`, CSS, `<script>`, iframes and WebSockets load for real.
 - Code that captured `window.fetch` before the interceptors patched it bypasses the mocks. `@percy/sdk-utils` does this; its server is in `bypass` by default.
+- Mock the request instead of stubbing `window.fetch` (for example with `sinon.stub(window, 'fetch')`). A stub replaces the mocking wrapper for that test; one restored after teardown leaves a stale wrapper behind, which passes requests straight to the original `fetch` and is unwrapped when the next test starts.
 - `namespace` applies only to type shortcuts. Explicit paths include it themselves.
 - Query values arrive as strings, and an exact `withQuery` must list empty params too (`?tag=` is `{ tag: '' }`).
 - Built ids are numbers (JSON:API documents stringify them) and request bodies carry strings. Compare with `String(record.id)`.

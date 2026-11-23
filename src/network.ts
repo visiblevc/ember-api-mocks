@@ -10,6 +10,7 @@ import {
   endOpenResponses,
   installFetchWaiter,
   removeFetchWaiter,
+  unwrapStaleFetch,
 } from './fetch-waiter.ts';
 import { percyOrigin, settings, type UnhandledPolicy } from './config.ts';
 
@@ -165,8 +166,10 @@ export function useHandler(handler: HttpHandler): void {
 }
 
 export function enableNetwork(): void {
+  unwrapStaleFetch();
+  const original = globalThis.fetch;
   network().enable();
-  installFetchWaiter((url) => !isBypassed(url));
+  installFetchWaiter(original, (url) => !isBypassed(url));
   if (settings().beacons) {
     installBeaconShim();
   }
