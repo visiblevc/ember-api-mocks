@@ -21,6 +21,7 @@
   },
   "license": "MIT",
   "author": "Visible",
+  "type": "module",
   "imports": {
     "#src/*": "./src/*"
   },
@@ -123,12 +124,12 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@ember-data/request-utils": "*",
+    "@ember-data/request-utils": ">= 5.3",
     "@ember/test-helpers": ">= 3",
     "@ember/test-waiters": ">= 3",
-    "ember-data": "*",
-    "ember-data-model-fragments": "*",
-    "ember-inflector": "*",
+    "ember-data": ">= 4.12",
+    "ember-data-model-fragments": ">= 9",
+    "ember-inflector": ">= 4",
     "ember-qunit": ">= 8",
     "qunit": ">= 2.17"
   },

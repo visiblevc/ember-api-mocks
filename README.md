@@ -40,7 +40,7 @@ CI runs the addon's tests against:
 
 It is also used with ember-data 5.3 and 5.6. ember-data is optional: `api` and `build` work without it, `seed` needs it.
 
-Peer dependencies: `qunit` 2.17+, `ember-qunit` 8+, `@ember/test-helpers` 3+, `@ember/test-waiters` 3+. Optional: `ember-data`, `ember-inflector`, `@ember-data/request-utils`, `ember-data-model-fragments`.
+Peer dependencies: `qunit` 2.17+, `ember-qunit` 8+, `@ember/test-helpers` 3+, `@ember/test-waiters` 3+. Optional: `ember-data` 4.12+, `ember-inflector` 4+, `@ember-data/request-utils` 5.3+, `ember-data-model-fragments` 9+.
 
 ## Installation
 
