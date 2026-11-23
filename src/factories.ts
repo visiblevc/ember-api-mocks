@@ -40,7 +40,6 @@ const sideloads = new WeakMap<BuiltRecord, Related[]>();
 const relationshipMaps = new WeakMap<BuiltRecord, Map<string, Relationship>>();
 const transients = new WeakMap<BuiltRecord, Attrs>();
 const overrideKeys = new WeakMap<BuiltRecord, Override[]>();
-const autoIds = new WeakSet<BuiltRecord>();
 const factories = new WeakMap<BuiltRecord, string>();
 
 interface Override {
@@ -112,16 +111,11 @@ export function sequence(generate: (n: number) => unknown): Sequence {
   return new Sequence(generate);
 }
 
-export function formatOf(name: string): Format {
-  return definitions.get(name)?.format ?? settings().format;
-}
-
-export function urlOf(name: string): string | undefined {
-  return definitions.get(name)?.url;
-}
-
-export function hooksOf(name: string): FactoryDefinition {
-  return definitions.get(name) ?? {};
+export function definitionOf(
+  name: string,
+): FactoryDefinition & { format: Format } {
+  const definition = definitions.get(name) ?? {};
+  return { ...definition, format: definition.format ?? settings().format };
 }
 
 function isBuilt(value: unknown): value is BuiltRecord {
@@ -132,36 +126,17 @@ function isBuilt(value: unknown): value is BuiltRecord {
   );
 }
 
-function relate(
-  record: BuiltRecord,
-  key: string,
-  association: Association,
+function link(
+  { kind, type }: Relationship,
   value: unknown,
-  format: Format,
   related: Related[],
-  relationships: Map<string, Relationship>,
-): void {
-  const kind = association.kind as RelationshipKind;
-  const wireKey = format.relationshipKey(key, kind);
-  const items = kind === 'hasMany' ? ((value ?? []) as unknown[]) : [value];
-  for (const item of items) {
-    if (isBuilt(item)) {
-      related.push({ type: factoryOf(item) ?? association.type, record: item });
-    }
+): unknown {
+  const items = kind === 'hasMany' ? [value ?? []].flat() : [value];
+  for (const item of items.filter(isBuilt)) {
+    related.push({ type: factoryOf(item) ?? type, record: item });
   }
   const idOf = (item: unknown) => (isBuilt(item) ? item.id : item);
-  record[wireKey] =
-    kind === 'hasMany' ? items.map(idOf) : value == null ? value : idOf(value);
-  relationships.set(wireKey, { type: association.type, kind });
-}
-
-function idFor(name: string, value: unknown): unknown {
-  if (value instanceof Sequence) {
-    return value.generate(nextId(name));
-  } else if (typeof value === 'function') {
-    return (value as (n: number) => unknown)(nextId(name));
-  }
-  return value ?? nextId(name);
+  return kind === 'hasMany' ? items.map(idOf) : idOf(value);
 }
 
 export function build<T extends object = BuiltRecord>(
@@ -172,7 +147,7 @@ export function build<T extends object = BuiltRecord>(
   if (!definition) {
     throw new Error(`No factory defined for "${name}"`);
   }
-  const format = formatOf(name);
+  const { format } = definitionOf(name);
   const last = args.at(-1);
   const overrides: Overrides = isPlainObject(last)
     ? (args.pop() as Overrides)
@@ -203,15 +178,13 @@ export function build<T extends object = BuiltRecord>(
   }
   Object.assign(attrs, overrides);
 
-  const generated =
-    attrs.id == null ||
-    attrs.id instanceof Sequence ||
-    typeof attrs.id === 'function';
-  const record: BuiltRecord = { id: idFor(name, attrs.id) };
-  if (generated) {
-    autoIds.add(record);
-  } else if (Number.isInteger(Number(record.id)) && record.id !== '') {
-    sequences.set(name, Math.max(sequences.get(name) ?? 0, Number(record.id)));
+  const { id } = attrs;
+  const record: BuiltRecord = {
+    id:
+      id instanceof Sequence ? id.generate(nextId(name)) : (id ?? nextId(name)),
+  };
+  if (Number.isInteger(Number(id)) && id !== '' && id !== null) {
+    sequences.set(name, Math.max(sequences.get(name) ?? 0, Number(id)));
   }
 
   const related: Related[] = [];
@@ -225,26 +198,34 @@ export function build<T extends object = BuiltRecord>(
       options[key] = value;
     } else if (value instanceof Sequence) {
       record[key] = value.generate(nextId(`${name}.${key}`));
-    } else if (value instanceof Association) {
-      if (value.kind === 'hasMany' && value.args.length === 0) {
+    } else if (value instanceof Association && value.kind === 'fragment') {
+      const { id: _id, ...nested } = build(
+        value.type,
+        ...(value.args as BuildArg[]),
+      );
+      record[key] = nested;
+    } else if (value instanceof Association || declared[key]) {
+      const { type, kind } = (
+        value instanceof Association ? value : declared[key]
+      ) as Relationship;
+      if (
+        value instanceof Association &&
+        kind === 'hasMany' &&
+        !value.args.length
+      ) {
         throw new Error(
-          `hasMany('${value.type}') in a default or trait needs a count`,
+          `hasMany('${type}') in a default or trait needs a count`,
         );
-      } else if (value.kind === 'fragment') {
-        const { id: _id, ...nested } = build(
-          value.type,
-          ...(value.args as BuildArg[]),
-        );
-        record[key] = nested;
-      } else {
-        const built =
-          value.kind === 'hasMany'
-            ? buildList(value.type, ...value.args)
-            : build(value.type, ...(value.args as BuildArg[]));
-        relate(record, key, value, built, format, related, relationships);
       }
-    } else if (declared[key]) {
-      relate(record, key, declared[key], value, format, related, relationships);
+      const built =
+        value instanceof Association
+          ? kind === 'hasMany'
+            ? buildList(type, ...value.args)
+            : build(type, ...(value.args as BuildArg[]))
+          : value;
+      const wireKey = format.relationshipKey(key, kind);
+      record[wireKey] = link({ type, kind }, built, related);
+      relationships.set(wireKey, { type, kind });
     } else if (typeof value === 'function') {
       record[key] = undefined;
       deferred.push([key, value as (record: BuiltRecord) => unknown]);
@@ -308,10 +289,6 @@ export function overridesOf(record: BuiltRecord): Override[] {
   return overrideKeys.get(record) ?? [];
 }
 
-export function hasAutoId(record: BuiltRecord): boolean {
-  return autoIds.has(record);
-}
-
 export function sideload<T extends object>(
   record: T,
   ...related: Array<object | null | undefined>
@@ -369,28 +346,12 @@ function prepare(
     relationships.set(wireKey, relationship);
     const source = key in record && key !== wireKey ? key : wireKey;
     const value = record[source];
-    const items =
-      relationship.kind === 'hasMany'
-        ? Array.isArray(value)
-          ? (value as unknown[])
-          : []
-        : [value];
-    if (source === wireKey && !items.some(isBuilt)) {
+    if (source === wireKey && ![value].flat().some(isBuilt)) {
       continue;
     }
-    if (copy === record) {
-      copy = { ...record };
-    }
+    copy = copy === record ? { ...record } : copy;
     delete copy[source];
-    const idOf = (item: unknown) => (isBuilt(item) ? item.id : item);
-    copy[wireKey] =
-      relationship.kind === 'hasMany' ? items.map(idOf) : idOf(value);
-    for (const item of items.filter(isBuilt)) {
-      related.push({
-        type: factoryOf(item) ?? relationship.type,
-        record: item,
-      });
-    }
+    copy[wireKey] = link(relationship, value, related);
   }
   const prepared = { record: copy, related, relationships };
   cache.set(record, prepared);
@@ -404,7 +365,7 @@ export function documentFor(
   extra: Attrs,
   seeding: boolean,
 ): Attrs {
-  const format = formatOf(type);
+  const { format } = definitionOf(type);
   const cache = new Map<BuiltRecord, Prepared>();
   const prepared = (record: BuiltRecord, recordType = type) =>
     prepare(recordType, record, format, cache);

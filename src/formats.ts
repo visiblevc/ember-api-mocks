@@ -27,7 +27,6 @@ export interface DocumentContext {
 }
 
 export interface Format {
-  readonly name: string;
   readonly updateMethod: 'put' | 'patch';
   readonly separatesRelationships: boolean;
   keyError(key: string): string | undefined;
@@ -73,25 +72,30 @@ function collect(records: BuiltRecord[], context: DocumentContext): Related[] {
   return result;
 }
 
-function sideloadedDocument(
-  rootKey: (type: string, plural: boolean) => string,
-): Format['document'] {
-  return (type, data, extra, context) => {
-    const many = Array.isArray(data);
-    const records = many ? data : [data];
-    const result: Attrs = { [rootKey(type, many)]: many ? [...data] : data };
-    for (const { type: relatedType, record } of collect(records, context)) {
-      const key = rootKey(relatedType, true);
-      ((result[key] ??= []) as BuiltRecord[]).push(record);
-    }
-    return { ...result, ...extra };
-  };
+function idUnder(body: unknown, key: string): unknown {
+  const root =
+    body !== null && typeof body === 'object' ? (body as Attrs)[key] : null;
+  return root !== null && typeof root === 'object'
+    ? (root as Attrs).id
+    : undefined;
 }
 
-function bodyRoot(body: unknown, key: string): unknown {
-  return body !== null && typeof body === 'object'
-    ? (body as Attrs)[key]
-    : undefined;
+function sideloaded(
+  rootKey: (type: string, plural: boolean) => string,
+): Pick<Format, 'document' | 'idFromBody'> {
+  return {
+    document(type, data, extra, context) {
+      const many = Array.isArray(data);
+      const records = many ? data : [data];
+      const result: Attrs = { [rootKey(type, many)]: many ? [...data] : data };
+      for (const { type: relatedType, record } of collect(records, context)) {
+        const key = rootKey(relatedType, true);
+        ((result[key] ??= []) as BuiltRecord[]).push(record);
+      }
+      return { ...result, ...extra };
+    },
+    idFromBody: (type, body) => idUnder(body, rootKey(type, false)),
+  };
 }
 
 export function activeModel(): Format {
@@ -99,16 +103,13 @@ export function activeModel(): Format {
     plural ? pluralize(underscore(type)) : underscore(type);
 
   return {
-    name: 'activeModel',
     updateMethod: 'put',
     separatesRelationships: false,
     keyError: (key) => keyError('snake', key),
     relationshipKey: (key, kind) =>
       kind === 'belongsTo' ? `${key}_id` : `${singularize(key)}_ids`,
     path: (type) => `/${rootKey(type, true)}`,
-    document: sideloadedDocument(rootKey),
-    idFromBody: (type, body) =>
-      (bodyRoot(body, rootKey(type, false)) as Attrs | undefined)?.id,
+    ...sideloaded(rootKey),
   };
 }
 
@@ -129,15 +130,12 @@ export function rest(options: RestOptions = {}): Format {
     plural ? pluralize(cased(type)) : cased(type);
 
   return {
-    name: 'rest',
     updateMethod: 'put',
     separatesRelationships: false,
     keyError: (key) => keyError(keys, key),
     relationshipKey: (key) => key,
     path: options.path ?? ((type) => `/${pluralize(camelize(type))}`),
-    document: sideloadedDocument(rootKey),
-    idFromBody: (type, body) =>
-      (bodyRoot(body, rootKey(type, false)) as Attrs | undefined)?.id,
+    ...sideloaded(rootKey),
   };
 }
 
@@ -170,7 +168,6 @@ export function jsonApi(): Format {
   };
 
   return {
-    name: 'jsonApi',
     updateMethod: 'patch',
     separatesRelationships: true,
     keyError: (key) => keyError('dash', key),
@@ -229,7 +226,6 @@ export function jsonApi(): Format {
       };
     },
 
-    idFromBody: (_type, body) =>
-      (bodyRoot(body, 'data') as Attrs | undefined)?.id,
+    idFromBody: (_type, body) => idUnder(body, 'data'),
   };
 }

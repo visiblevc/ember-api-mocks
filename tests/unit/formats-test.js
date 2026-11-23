@@ -408,17 +408,15 @@ module('Unit | formats', function (hooks) {
       assert.strictEqual(factoryOf({ id: 1 }), undefined);
     });
 
-    test('a default id can be a sequence or a function', function (assert) {
+    test('a default id can be a sequence', function (assert) {
       defineFactory('uuid-thing', {
         default: { id: sequence((n) => `thing-${n}`), label: (t) => t.id },
       });
-      defineFactory('fn-thing', { default: { id: (n) => `fn-${n * 10}` } });
 
       assert.deepEqual(buildList('uuid-thing', 2), [
         { id: 'thing-1', label: 'thing-1' },
         { id: 'thing-2', label: 'thing-2' },
       ]);
-      assert.strictEqual(build('fn-thing').id, 'fn-10');
       assert.strictEqual(build('uuid-thing', { id: 'mine' }).id, 'mine');
       assert.strictEqual(build('uuid-thing').id, 'thing-3');
     });

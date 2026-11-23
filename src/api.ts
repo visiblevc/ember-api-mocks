@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
 import { settings } from './config.ts';
-import { factoryOf, formatOf, nextId, payload, urlOf } from './factories.ts';
+import { definitionOf, factoryOf, nextId, payload } from './factories.ts';
 import type { Attrs, BuiltRecord } from './formats.ts';
 import {
   finishRequest,
@@ -114,7 +114,7 @@ function isObject(value: unknown): value is Attrs {
   return value !== null && typeof value === 'object';
 }
 
-function isSubset(expected: unknown, actual: unknown): boolean {
+function isSubset(expected: unknown, actual: unknown, exact = false): boolean {
   expected = plain(expected);
   if (typeof expected === 'function') {
     return Boolean((expected as (value: unknown) => unknown)(actual));
@@ -122,17 +122,21 @@ function isSubset(expected: unknown, actual: unknown): boolean {
     return (
       Array.isArray(actual) &&
       actual.length === expected.length &&
-      expected.every((value, index) => isSubset(value, actual[index]))
+      expected.every((value, index) => isSubset(value, actual[index], exact))
     );
   } else if (isObject(expected)) {
+    const entries = Object.entries(expected);
+    const required = entries.filter(([, value]) => value !== undefined);
     return (
       isObject(actual) &&
       !Array.isArray(actual) &&
-      Object.entries(expected).every(
+      (!exact || required.length === Object.keys(actual).length) &&
+      entries.every(
         ([key, value]) =>
-          value === undefined ||
-          ((Object.hasOwn(actual, key) || typeof value === 'function') &&
-            isSubset(value, actual[key])),
+          (Object.hasOwn(actual, key) ||
+            value === undefined ||
+            typeof value === 'function') &&
+          isSubset(value, actual[key], exact),
       )
     );
   } else if (expected === null || expected === undefined) {
@@ -141,27 +145,6 @@ function isSubset(expected: unknown, actual: unknown): boolean {
     return false;
   }
   return text(expected) === text(actual);
-}
-
-function isSameQuery(expected: unknown, actual: unknown): boolean {
-  expected = plain(expected);
-  if (isObject(expected)) {
-    const keys = Object.keys(expected).filter(
-      (key) => expected[key] !== undefined,
-    );
-    return (
-      isObject(actual) &&
-      Array.isArray(expected) === Array.isArray(actual) &&
-      keys.length === Object.keys(actual).length &&
-      keys.every(
-        (key) =>
-          Object.hasOwn(actual, key) && isSameQuery(expected[key], actual[key]),
-      )
-    );
-  } else if (isObject(actual)) {
-    return false;
-  }
-  return text(expected ?? '') === text(actual ?? '');
 }
 
 function hasHeaders(
@@ -183,7 +166,7 @@ function matches(
 ): boolean {
   return (
     (body === undefined || isSubset(body, call.body)) &&
-    (query === undefined || isSameQuery(query, call.query)) &&
+    (query === undefined || isSubset(query, call.query, true)) &&
     (partialQuery === undefined || isSubset(partialQuery, call.query)) &&
     (headers === undefined || hasHeaders(headers, call.headers))
   );
@@ -341,7 +324,8 @@ function register(
 }
 
 function collectionUrl(type: string): string {
-  return urlOf(type) ?? `${settings().namespace}${formatOf(type).path(type)}`;
+  const { url, format } = definitionOf(type);
+  return url ?? `${settings().namespace}${format.path(type)}`;
 }
 
 function memberUrl(type: string, id?: unknown): string {
@@ -456,7 +440,7 @@ export const api = {
   },
 
   create(type: string, attrs: Attrs | Responder = {}): Handle {
-    const format = formatOf(type);
+    const { format } = definitionOf(type);
     const created = (values: Attrs | Responder) =>
       typeof values === 'function'
         ? values
@@ -484,7 +468,7 @@ export const api = {
             payload(type, { id: id ?? params.id, ...values });
 
     return register(
-      formatOf(type).updateMethod,
+      definitionOf(type).format.updateMethod,
       memberUrl(type, id),
       updated(attrs),
       updated as (...args: unknown[]) => ResponseValue,

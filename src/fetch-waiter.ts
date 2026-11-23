@@ -1,7 +1,7 @@
 import { buildWaiter } from '@ember/test-waiters';
 
 const waiter = buildWaiter('ember-api-mocks:responses');
-const nativeSetTimeout = window.setTimeout.bind(window);
+export const nativeSetTimeout = window.setTimeout.bind(window);
 const READERS = [
   'json',
   'text',
@@ -22,6 +22,10 @@ const open = new Set<Pending>();
 let installed:
   | { wrapper: typeof fetch; inner: typeof fetch; state: WrapperState }
   | undefined;
+
+export function afterTwoMacrotasks(callback: () => void): void {
+  nativeSetTimeout(() => nativeSetTimeout(callback, 0), 0);
+}
 
 function end(pending: Pending): void {
   if (!pending.ended) {
@@ -123,15 +127,11 @@ export function installFetchWaiter(
     open.add(pending);
     return inner(input, init).then(
       (response) => {
-        nativeSetTimeout(
-          () =>
-            nativeSetTimeout(() => {
-              if (!pending.readStarted) {
-                end(pending);
-              }
-            }, 0),
-          0,
-        );
+        afterTwoMacrotasks(() => {
+          if (!pending.readStarted) {
+            end(pending);
+          }
+        });
         return instrument(response, pending);
       },
       (error: unknown) => {

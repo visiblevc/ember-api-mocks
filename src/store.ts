@@ -9,9 +9,8 @@ import {
   build,
   buildList,
   documentFor,
+  definitionOf,
   factoryOf,
-  formatOf,
-  hooksOf,
   overridesOf,
   transientOf,
 } from './factories.ts';
@@ -113,7 +112,7 @@ function rejectUnusedOverrides(
   const undeclared = overrides.find(
     ({ key, relationship }) => !relationship && relationships.has(key),
   );
-  if (undeclared && formatOf(name).separatesRelationships) {
+  if (undeclared && definitionOf(name).format.separatesRelationships) {
     throw new Error(
       `seed('${name}') got ${undeclared.key}, a relationship the ${name} factory does not declare. Declare it in the factory's relationships: { ${undeclared.key}: belongsTo(...) } or hasMany(...).`,
     );
@@ -169,14 +168,15 @@ function push(name: string, record: BuiltRecord): unknown {
     record,
     modelKeys(store.serializerFor(name), modelClass),
   );
-  hooksOf(name).beforeSeed?.(record, store);
+  const { beforeSeed, afterSeed } = definitionOf(name);
+  beforeSeed?.(record, store);
   store.pushPayload(
     name,
     JSON.parse(JSON.stringify(documentFor(name, record, {}, true))),
   );
   const model = store.peekRecord(name, String(record.id)) as object;
   sources.set(model, record);
-  hooksOf(name).afterSeed?.(model, transientOf(record));
+  afterSeed?.(model, transientOf(record));
   return model;
 }
 

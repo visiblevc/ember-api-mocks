@@ -164,7 +164,7 @@ defineFactory('subscription', {
 ```
 
 - `build(name, ...traits, overrides)` returns a plain JSON record with an `id`. `buildList(name, 3, ...traits, overrides)` returns three; without a count, each argument describes one record: `buildList('user', { name: 'A' }, ['admin', { name: 'B' }])`.
-- Ids count up from 1 per factory and restart for every test. An explicit id (`{ id: 5 }` or `{ id: '5' }`) moves the counter past it. For string or uuid ids, set `default.id` to a `sequence((n) => ...)` or a function of `n`.
+- Ids count up from 1 per factory and restart for every test. An explicit id (`{ id: 5 }` or `{ id: '5' }`) moves the counter past it. For string or uuid ids, set `default.id` to a `sequence((n) => ...)`.
 - Defaults are copied per record. A function value is called with the record once the other values are set.
 - `transient` values are options, not attributes. Read them in `afterSeed`.
 - An override key in the wrong case for the format throws (`planId` for ActiveModel, `plan_id` for JSON:API). The serializer would ignore it and the test would run on the wrong data.

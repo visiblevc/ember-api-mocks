@@ -11,8 +11,10 @@ import * as QUnit from 'qunit';
 
 import { installBeaconShim, removeBeaconShim } from './beacon.ts';
 import {
+  afterTwoMacrotasks,
   endOpenResponses,
   installFetchWaiter,
+  nativeSetTimeout,
   removeFetchWaiter,
   unwrapStaleFetch,
 } from './fetch-waiter.ts';
@@ -96,7 +98,6 @@ const unhandled = http.all('*', ({ request, requestId }) => {
   return new HttpResponse(null, { status: 404 });
 });
 
-const nativeSetTimeout = window.setTimeout.bind(window);
 const nativeNow = performance.now.bind(performance);
 
 interface RequestEvent {
@@ -122,7 +123,7 @@ function endRequest(requestId: string): void {
 
 export function finishRequest(requestId: string): void {
   if (pendingRequests.has(requestId)) {
-    nativeSetTimeout(() => nativeSetTimeout(() => endRequest(requestId), 0), 0);
+    afterTwoMacrotasks(() => endRequest(requestId));
   }
 }
 
