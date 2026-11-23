@@ -2,6 +2,17 @@
 
 ## Release (2026-11-23)
 
+* @visiblevc/ember-api-mocks 0.3.0 (minor)
+
+#### :rocket: Enhancement
+* `@visiblevc/ember-api-mocks`
+  * [#5](https://github.com/visiblevc/ember-api-mocks/pull/5) Replace the setup wrappers with a `setupApiMocks` hook ([@whatthewhat](https://github.com/whatthewhat))
+
+#### Committers: 1
+- Mikhail Topolskiy ([@whatthewhat](https://github.com/whatthewhat))
+
+## Release (2026-11-23)
+
 * @visiblevc/ember-api-mocks 0.2.0 (major)
 
 #### :boom: Breaking Change

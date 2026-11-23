@@ -1,6 +1,6 @@
 {
   "name": "@visiblevc/ember-api-mocks",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Request mocking and API-shaped test data for Ember apps: in-page MSW interception, wire-format factories and store seeding",
   "keywords": [
     "ember-addon",
