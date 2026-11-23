@@ -1,0 +1,46 @@
+# For every push to the primary branch with .release-plan.json modified,
+# runs release-plan.
+#
+# Publishing uses npm trusted publishing (OIDC): no NPM_TOKEN secret.
+# Configure the trusted publisher on npmjs.com for this repository and
+# this workflow file (publish.yml) before the first release.
+
+name: Publish Stable
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.release-plan.json'
+
+concurrency:
+  group: publish-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: "NPM Publish"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          # npm >= 11.5.1 is required for trusted publishing; Node 24 ships it.
+          # pnpm publish hands the tarball to this npm.
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Publish to NPM
+        # Add NPM_CONFIG_PROVENANCE=true once the repository is public;
+        # npm cannot attest provenance for a private repository.
+        run: pnpm release-plan publish
+        env:
+          GITHUB_AUTH: ${{ secrets.GITHUB_TOKEN }}
