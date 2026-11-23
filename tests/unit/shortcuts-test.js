@@ -1,6 +1,7 @@
 import { module, test } from 'qunit';
 
-import { api, build, buildList, seed, setupTest } from '#src/index.ts';
+import { api, build, buildList, seed } from '#src/index.ts';
+import { setupTest } from '../helpers.js';
 
 import { API_HOST } from '../config.ts';
 

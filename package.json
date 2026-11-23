@@ -129,7 +129,6 @@
     "ember-data": ">= 4.12",
     "ember-data-model-fragments": ">= 9",
     "ember-inflector": ">= 4",
-    "ember-qunit": ">= 8",
     "qunit": ">= 2.17"
   },
   "peerDependenciesMeta": {

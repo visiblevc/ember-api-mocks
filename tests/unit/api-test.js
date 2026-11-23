@@ -7,13 +7,12 @@ import {
   payload,
   reply,
   seed,
-  setupTest,
   sideload,
 } from '#src/index.ts';
 import { sourceOf } from '#src/store.ts';
 
 import { API_HOST } from '../config.ts';
-import { collectFailures, send } from '../helpers.js';
+import { collectFailures, send, setupTest } from '../helpers.js';
 
 module('Unit | api', function (hooks) {
   setupTest(hooks);

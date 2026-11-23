@@ -12,9 +12,9 @@ import {
   payload,
   rest,
   sequence,
-  setupTest,
   sideload,
 } from '#src/index.ts';
+import { setupTest } from '../helpers.js';
 import { transientOf } from '#src/factories.ts';
 
 module('Unit | formats', function (hooks) {
