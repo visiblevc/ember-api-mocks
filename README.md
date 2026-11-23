@@ -252,7 +252,7 @@ api.patch('/settings', null);
 api.delete('https://auth.example.com/sessions', null);
 ```
 
-Paths that start with `/` are joined to `apiHost`, without `namespace`; absolute URLs are used as is. Any other path throws. A response is an object, a function of the call (sync or async), a `Response` (`reply(status, body)`, `reply(status)` for an empty body, or MSW's `HttpResponse`, re-exported here), or `null` for a 204. A model from `seed` inside a plain response is served as its source JSON.
+Paths that start with `/` are joined to `apiHost`, without `namespace`; absolute URLs are used as is. Any other path throws. A response is an object, a function of the call (sync or async), a `Response` (`reply(status, body)`, `reply(status)` for an empty body, or any `Response`), or `null` for a 204. A model from `seed` inside a plain response is served as its source JSON.
 
 ### Handles
 

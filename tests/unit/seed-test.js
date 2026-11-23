@@ -8,8 +8,8 @@ import {
   seedList,
   seedRecord,
   setupTest,
-  sourceOf,
 } from '#src/index.ts';
+import { sourceOf } from '#src/store.ts';
 
 module('Unit | seed', function (hooks) {
   setupTest(hooks);
