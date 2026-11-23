@@ -235,7 +235,10 @@ function register(
     },
     returns(...args) {
       const [value] = args;
-      const isRaw = value instanceof Response || typeof value === 'function';
+      const isRaw =
+        value === null ||
+        value instanceof Response ||
+        typeof value === 'function';
       response =
         toPayload && !isRaw ? toPayload(...args) : (value as ResponseValue);
       return handle;

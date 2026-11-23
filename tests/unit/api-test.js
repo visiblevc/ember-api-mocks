@@ -164,10 +164,13 @@ module('Unit | api', function (hooks) {
     const computed = await send('GET', '/widgets?page=3');
     handle.returns(null);
     const empty = await send('GET', '/widgets');
+    api.create('contact').returns(null);
+    const created = await send('POST', '/contacts', { contact: {} });
 
     assert.strictEqual(raw.status, 418);
     assert.deepEqual(await computed.json(), { page: '3' });
     assert.strictEqual(empty.status, 204);
+    assert.strictEqual(created.status, 204);
   });
 
   test('reply without a body sends an empty body', async function (assert) {
