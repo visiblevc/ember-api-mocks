@@ -102,6 +102,7 @@ const unhandled = http.all('*', ({ request, requestId }) => {
 });
 
 const nativeSetTimeout = window.setTimeout.bind(window);
+const nativeNow = performance.now.bind(performance);
 
 interface RequestEvent {
   requestId: string;
@@ -187,9 +188,9 @@ export function disableNetwork(): void {
 const SETTLE_LIMIT_MS = 1000;
 
 export async function settleRequests(): Promise<void> {
-  const deadline = performance.now() + SETTLE_LIMIT_MS;
+  const deadline = nativeNow() + SETTLE_LIMIT_MS;
   let quiet = 0;
-  while (quiet < 2 && performance.now() < deadline) {
+  while (quiet < 2 && nativeNow() < deadline) {
     await new Promise((resolve) => nativeSetTimeout(resolve, 0));
     quiet = pendingRequests.size === 0 && !hasPendingWaiters() ? quiet + 1 : 0;
   }

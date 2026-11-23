@@ -46,18 +46,32 @@ module('Unit | network', function (hooks) {
     assert.deepEqual(this.failures, []);
   });
 
-  test('settleRequests fails on a request that never settles', async function (assert) {
+  test('settleRequests fails on a request that never settles, also under a frozen clock', async function (assert) {
     api.get('/hanging', () => new Promise(() => undefined));
-
     send('GET', '/hanging');
-    const started = performance.now();
-    await settleRequests();
-    const elapsed = performance.now() - started;
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
+    assert.true(hasPendingWaiters());
+
+    performance.now = () => 0;
+    const started = Date.now();
+    try {
+      const outcome = await Promise.race([
+        settleRequests().then(() => 'settled'),
+        new Promise((resolve) => setTimeout(() => resolve('hung'), 3000)),
+      ]);
+
+      assert.strictEqual(outcome, 'settled');
+    } finally {
+      delete performance.now;
+    }
+    const elapsed = Date.now() - started;
+
+    assert.true(elapsed >= 900 && elapsed < 2000, `took ${elapsed} ms`);
+    assert.false(hasPendingWaiters());
     assert.deepEqual(this.failures, [
       'Requests were still pending when the test ended',
     ]);
-    assert.true(elapsed >= 900 && elapsed < 2000, `took ${elapsed} ms`);
   });
 
   module('beacons', function (hooks) {
@@ -111,20 +125,6 @@ module('Unit | network', function (hooks) {
     await settled();
 
     assert.deepEqual(body, { ok: 1 });
-  });
-
-  test('a request that never settles does not leak its waiter', async function (assert) {
-    api.get('/hanging', () => new Promise(() => undefined));
-
-    send('GET', '/hanging');
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    assert.true(hasPendingWaiters());
-
-    await settleRequests();
-
-    assert.false(hasPendingWaiters());
-    assert.strictEqual(this.failures.length, 1);
   });
 
   test("Percy's local server is never mocked", async function (assert) {
