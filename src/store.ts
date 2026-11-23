@@ -142,20 +142,23 @@ function push(name: string, record: BuiltRecord): unknown {
   return model;
 }
 
-export function seed(name: string, ...args: Array<string | Attrs>): unknown {
-  return push(name, build(name, ...args));
+export function seed<T = unknown>(
+  name: string,
+  ...args: Array<string | Attrs>
+): T {
+  return push(name, build(name, ...args)) as T;
 }
 
-export function seedList(name: string, ...args: unknown[]): unknown[] {
-  return buildList(name, ...args).map((record) => push(name, record));
+export function seedList<T = unknown>(name: string, ...args: unknown[]): T[] {
+  return buildList(name, ...args).map((record) => push(name, record) as T);
 }
 
-export function seedRecord(record: BuiltRecord): unknown {
+export function seedRecord<T = unknown>(record: BuiltRecord): T {
   const name = factoryOf(record);
   if (!name) {
     throw new Error('seedRecord() takes a record from build()');
   }
-  return push(name, record);
+  return push(name, record) as T;
 }
 
 export function sourceOf(value: unknown): unknown {

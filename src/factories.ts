@@ -139,7 +139,10 @@ function relate(
   relationships.set(wireKey, { type: association.type, kind });
 }
 
-export function build(name: string, ...args: BuildArg[]): BuiltRecord {
+export function build<T extends object = BuiltRecord>(
+  name: string,
+  ...args: BuildArg[]
+): T {
   const definition = definitions.get(name);
   if (!definition) {
     throw new Error(`No factory defined for "${name}"`);
@@ -232,16 +235,19 @@ export function build(name: string, ...args: BuildArg[]): BuiltRecord {
           : key;
       }),
   );
-  return record;
+  return record as T;
 }
 
-export function buildList(name: string, ...args: unknown[]): BuiltRecord[] {
+export function buildList<T extends object = BuiltRecord>(
+  name: string,
+  ...args: unknown[]
+): T[] {
   if (typeof args[0] === 'number') {
     const [count, ...rest] = args as [number, ...BuildArg[]];
-    return Array.from({ length: count }, () => build(name, ...rest));
+    return Array.from({ length: count }, () => build<T>(name, ...rest));
   }
   return (args as Array<BuildArg | BuildArg[]>).map((spec) =>
-    build(name, ...[spec].flat()),
+    build<T>(name, ...[spec].flat()),
   );
 }
 
