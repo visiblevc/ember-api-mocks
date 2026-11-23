@@ -35,10 +35,10 @@ CI runs the addon's tests against:
 | --- | --- |
 | ember-source | 5.8, 5.12, 6.4, 6.12, 7.x (latest, beta, alpha) |
 | ember-data | 4.12 (with ember-data-model-fragments 9), 5.8, latest 5.x |
-| Builds | Vite with Embroider, and classic ember-cli with ember-auto-import 2 |
+| Builds | Vite with Embroider (compat mode for the ember-source 5.x and ember-data 4.12 runs) |
 | Node | 22.12 or later (required by MSW 3) |
 
-It is also used with ember-data 5.3 and 5.6. ember-data is optional: `api` and `build` work without it, `seed` needs it.
+Classic ember-cli apps with ember-auto-import 2 work too, but CI does not build one. ember-data is optional: `api` and `build` work without it, `seed` needs it.
 
 Peer dependencies: `qunit` 2.17+, `ember-qunit` 8+, `@ember/test-helpers` 3+, `@ember/test-waiters` 3+. Optional: `ember-data` 4.12+, `ember-inflector` 4+, `@ember-data/request-utils` 5.3+, `ember-data-model-fragments` 9+.
 
@@ -82,7 +82,7 @@ If your app has its own wrappers in `tests/helpers`, call these from them.
 | `namespace` | `''` | Prefix for type shortcut URLs only (`api/v1`). |
 | `format` | `jsonApi()` | Default wire format. A factory can override it. |
 | `origins` | `[]` | More origins that count as your app (a CDN, a second API). |
-| `bypass` | Percy's local server | Origins that always reach the network untouched. By default that is Percy's server, read from `@percy/sdk-utils` at request time (`http://localhost:5338` unless Percy says otherwise). Setting `bypass` replaces the default, so list Percy's address yourself if you need both. |
+| `bypass` | Percy's local server | Origins that always reach the network untouched. The default is the address `@percy/sdk-utils` reports (`http://localhost:5338` unless Percy says otherwise); setting `bypass` replaces it. |
 | `beacons` | `false` | Send `navigator.sendBeacon` through `fetch` so mocks can answer it. |
 
 `configure` merges with earlier calls. Settings are read when the first test runs.
@@ -110,7 +110,7 @@ configure({
 // GET /shared_decks/1 -> { shared_deck: { id: 1, title: 'Q3', owner: 2 } }
 ```
 
-JSON:API: `{ data, included }`, plural dasherized types, string ids, `PATCH`. A relationship's `data` is written only when the related records are in the document, as jsonapi-resources does.
+JSON:API: `{ data, included }`, plural dasherized types, string ids, `PATCH`. A relationship's `data` is written only when the related records are in the document, as jsonapi-resources does. `seed` always writes it.
 
 ```js
 configure({ format: jsonApi() });
@@ -166,6 +166,7 @@ defineFactory('subscription', {
 - `build(name, ...traits, overrides)` returns a plain JSON record with an `id`. `buildList(name, 3, ...traits, overrides)` returns three; without a count, each argument describes one record: `buildList('user', { name: 'A' }, ['admin', { name: 'B' }])`.
 - Ids count up from 1 per factory and restart for every test. An explicit id (`{ id: 5 }` or `{ id: '5' }`) moves the counter past it. For string or uuid ids, set `default.id` to a `sequence((n) => ...)`.
 - Defaults are copied per record. A function value is called with the record once the other values are set.
+- A `sequence` advances only when the default value is used. For values that follow the id, as in Mirage's `(i) => ...`, use a function of the record: `` name: ({ id }) => `User ${id}` ``.
 - `transient` values are options, not attributes. Read them in `afterSeed`.
 - An override key in the wrong case for the format throws (`planId` for ActiveModel, `plan_id` for JSON:API). The serializer would ignore it and the test would run on the wrong data.
 
@@ -237,7 +238,7 @@ Acceptance tests build JSON, mock the requests the page makes, and let the app l
 | `api.update(record, attrs)` or `api.update('contact', id?, attrs)` | `PUT` or `PATCH /contacts/:id` | `{ id, ...attrs }` |
 | `api.destroy(record)` or `api.destroy('contact', id?)` | `DELETE /contacts/:id` | 204 |
 
-URLs come from the factory's `url`, or `namespace` plus the format's path. `find`, `update` and `destroy` accept a record from `build` or `seed`; without an id they answer any id. Payloads are put together when the request arrives, so later changes to a built record are served. Every shortcut also takes a function of the call in place of the default response.
+URLs come from the factory's `url`, or `namespace` plus the format's path. `find`, `update` and `destroy` accept a record from `build` or `seed`; without an id they answer any id. A record mocks its own URL (`/contacts/1`), so `lastCall.params.id` is undefined; pass the type instead (`api.update('contact')`) when a test checks the id. Payloads are put together when the request arrives, so later changes to a built record are served. Every shortcut also takes a function of the call in place of the default response.
 
 ### Explicit paths
 
@@ -285,7 +286,7 @@ A request no mock answers gets a 404. For the page origin, `apiHost` and `origin
 
 ### Waiting for requests
 
-Mocked requests register with a test waiter, so `await settled()`, `click`, `visit` and the other helpers wait for them, including a raw `fetch` from a service. A `fetch` stays pending until the app has read the response body with `json()`, `text()` or another reader, or for two macrotasks if it never reads one. Reading `response.body` as a stream is not tracked. After each test, the setup functions wait up to one second for requests and other test waiters still pending, and fail the test if any remain.
+Mocked requests register with a test waiter, so `await settled()`, `click`, `visit` and the other helpers wait for them, including a raw `fetch` from a service. A `fetch` stays pending until the app has read the response body with `json()`, `text()` or another reader, or for two macrotasks if it never reads one. Reading `response.body` as a stream is not tracked. After each test, the setup functions wait up to one second for requests and other test waiters still pending, and fail the test if any remain. Mocked responses arrive in real time, also under fake timers.
 
 ### Beacons
 
@@ -346,24 +347,20 @@ api.destroy('user', ({ params }) => {
 ## Things to know
 
 - Only `fetch` and `XMLHttpRequest` are intercepted. `<img>`, CSS, `<script>`, iframes and WebSockets load for real.
-- Code that captured `window.fetch` before the interceptors patched it bypasses the mocks. `@percy/sdk-utils` does this; its server is in `bypass` by default.
+- Code that captured `window.fetch` before the interceptors patched it bypasses the mocks.
 - Mock the request instead of stubbing `window.fetch` (for example with `sinon.stub(window, 'fetch')`). A stub replaces the mocking wrapper for that test; one restored after teardown leaves a stale wrapper behind, which passes requests straight to the original `fetch` and is unwrapped when the next test starts.
-- `namespace` applies only to type shortcuts. Explicit paths include it themselves.
 - Query values arrive as strings, and an exact `withQuery` must list empty params too (`?tag=` is `{ tag: '' }`).
 - Built ids are numbers (JSON:API documents stringify them) and request bodies carry strings. Compare with `String(record.id)`.
 - A record in a response must come from `build` or `seed`. A record from `store.createRecord` throws; respond with JSON.
-- Mocked responses arrive in real time, also under fake timers.
 - Requests sent together (`Promise.all`) are matched after their bodies are parsed, so their handlers can run in either order. Assert on each handle's `calls`, not on the order of `api.requests`.
-- A `sequence` advances only when the default value is used. For names that follow the id, as in Mirage's `(i) => ...`, use a function of the record: `` name: ({ id }) => `User ${id}` ``.
 - `api.query` answers the same payload whatever the query. For paging or search, use `api.get` with a function that returns `payload(type, records.slice(...), { meta })`.
-- JSON:API responses leave out linkage to records outside the document. `seed` always writes linkage.
 - Pluralization comes from `@ember-data/request-utils` 5.3 or later when the app depends on it directly, then `ember-inflector`. Register custom rules where your serializers read them. Without either package the rule is a plain `s`, so give a factory with an irregular plural a `url`.
 - `seed` uses `store.pushPayload`, which ember-data 5 deprecates.
 - Interception uses `defineNetwork` from `msw/experimental`, so `msw` is pinned to an exact version and updated deliberately.
 
 ## Contributing
 
-See `CONTRIBUTING.md` in the repository.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
