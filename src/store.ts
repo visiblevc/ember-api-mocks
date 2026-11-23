@@ -1,0 +1,161 @@
+import { getContext } from '@ember/test-helpers';
+
+import {
+  build,
+  buildList,
+  factoryOf,
+  hooksOf,
+  overridesOf,
+  payload,
+  transientOf,
+} from './factories.ts';
+import type { Attrs, BuiltRecord } from './formats.ts';
+
+/* Minimal structural types so the addon works with ember-data 4.12 and 5.x */
+interface ModelClass {
+  prototype: object;
+  eachAttribute(callback: (name: string) => void): void;
+  eachRelationship(
+    callback: (name: string, meta: { kind: string }) => void,
+  ): void;
+}
+
+interface Serializer {
+  attrs?: Record<string, string | { key?: string }>;
+  keyForAttribute(name: string, method: string): string;
+  keyForRelationship(name: string, kind: string, method: string): string;
+}
+
+export interface Store {
+  modelFor(name: string): ModelClass;
+  serializerFor(name: string): Serializer;
+  pushPayload(name: string, payload: unknown): void;
+  peekRecord(name: string, id: string): unknown;
+}
+
+export interface Seeder {
+  handles(modelClass: ModelClass): boolean;
+  seed(
+    store: Store,
+    name: string,
+    modelClass: ModelClass,
+    record: BuiltRecord,
+  ): unknown;
+}
+
+const seeders: Seeder[] = [];
+const sources = new WeakMap<object, BuiltRecord>();
+
+export function registerSeeder(seeder: Seeder): void {
+  seeders.push(seeder);
+}
+
+export function attributeKeys(
+  serializer: Serializer,
+  modelClass: ModelClass,
+): Set<string> {
+  const keys = new Set(['id']);
+  modelClass.eachAttribute((attribute) => {
+    keys.add(attribute);
+    keys.add(serializer.keyForAttribute(attribute, 'deserialize'));
+  });
+  return keys;
+}
+
+function modelKeys(
+  serializer: Serializer,
+  modelClass: ModelClass,
+): Set<string> {
+  const keys = attributeKeys(serializer, modelClass);
+  modelClass.eachRelationship((relationship, { kind }) => {
+    const key = serializer.keyForRelationship(
+      relationship,
+      kind,
+      'deserialize',
+    );
+    keys.add(key);
+    keys.add(`${key.replace(/_ids?$/, '')}_type`);
+  });
+  for (const [name, mapping] of Object.entries(serializer.attrs ?? {})) {
+    keys.add(serializer.keyForAttribute(name, 'deserialize'));
+    const key = typeof mapping === 'string' ? mapping : mapping.key;
+    if (key) {
+      keys.add(key);
+    }
+  }
+  return keys;
+}
+
+function rejectUnusedOverrides(
+  name: string,
+  record: BuiltRecord,
+  keys: Set<string>,
+): void {
+  const unused = overridesOf(record).filter((key) => !keys.has(key));
+  if (unused.length) {
+    throw new Error(
+      `seed('${name}') got ${unused.join(', ')}, which the ${name} model does not read. Use the keys the API sends.`,
+    );
+  }
+}
+
+function currentStore(): Store {
+  const context = getContext() as
+    { owner?: { lookup(name: string): unknown } } | undefined;
+  if (!context?.owner) {
+    throw new Error(
+      'seed() needs a test set up with setupTest or setupRenderingTest',
+    );
+  }
+  return context.owner.lookup('service:store') as Store;
+}
+
+function push(name: string, record: BuiltRecord): unknown {
+  const store = currentStore();
+  const modelClass = store.modelFor(name);
+  const seeder = seeders.find((candidate) => candidate.handles(modelClass));
+  if (seeder) {
+    return seeder.seed(store, name, modelClass, record);
+  }
+  rejectUnusedOverrides(
+    name,
+    record,
+    modelKeys(store.serializerFor(name), modelClass),
+  );
+  hooksOf(name).beforeSeed?.(record, store);
+  store.pushPayload(name, JSON.parse(JSON.stringify(payload(name, record))));
+  const model = store.peekRecord(name, String(record.id)) as object;
+  sources.set(model, record);
+  hooksOf(name).afterSeed?.(model, transientOf(record));
+  return model;
+}
+
+export function seed(name: string, ...args: Array<string | Attrs>): unknown {
+  return push(name, build(name, ...args));
+}
+
+export function seedList(name: string, ...args: unknown[]): unknown[] {
+  return buildList(name, ...args).map((record) => push(name, record));
+}
+
+export function seedRecord(record: BuiltRecord): unknown {
+  const name = factoryOf(record);
+  if (!name) {
+    throw new Error('seedRecord() takes a record from build()');
+  }
+  return push(name, record);
+}
+
+export function sourceOf(value: unknown): unknown {
+  if (value !== null && typeof value === 'object' && sources.has(value)) {
+    return sources.get(value);
+  }
+  const modelName = (value as { constructor?: { modelName?: unknown } } | null)
+    ?.constructor?.modelName;
+  if (typeof modelName === 'string') {
+    throw new Error(
+      `A ${modelName} record that was not created with seed() was used in a mocked response. Pass API JSON instead.`,
+    );
+  }
+  return value;
+}

@@ -1,13 +1,21 @@
 {
-  "name": "ember-api-mocks",
+  "name": "@visiblevc/ember-api-mocks",
   "version": "0.0.0",
-  "description": "The default blueprint for Embroider v2 addons.",
+  "description": "Request mocking and API-shaped test data for Ember apps, built on MSW",
   "keywords": [
-    "ember-addon"
+    "ember-addon",
+    "msw",
+    "mock",
+    "testing",
+    "factories",
+    "ember-data"
   ],
-  "repository": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visiblevc/ember-api-mocks.git"
+  },
   "license": "MIT",
-  "author": "",
+  "author": "Visible",
   "imports": {
     "#src/*": "./src/*"
   },
@@ -16,12 +24,11 @@
       "types": "./declarations/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./addon-main.js": "./addon-main.cjs",
-    "./*.css": "./dist/*.css",
-    "./*": {
-      "types": "./declarations/*.d.ts",
-      "default": "./dist/*.js"
-    }
+    "./model-fragments": {
+      "types": "./declarations/model-fragments.d.ts",
+      "default": "./dist/model-fragments.js"
+    },
+    "./addon-main.js": "./addon-main.cjs"
   },
   "files": [
     "addon-main.cjs",
@@ -47,7 +54,10 @@
   },
   "dependencies": {
     "@embroider/addon-shim": "^1.8.9",
-    "decorator-transforms": "^2.2.2"
+    "@embroider/macros": "^1.20.1",
+    "@mswjs/interceptors": "^0.45.11",
+    "decorator-transforms": "^2.2.2",
+    "msw": "3.0.7"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -72,6 +82,9 @@
     "@types/qunit": "^2.19.12",
     "babel-plugin-ember-template-compilation": "^4.0.0",
     "concurrently": "^9.0.1",
+    "ember-data": "~5.8.0",
+    "ember-data-model-fragments": "9.0.1",
+    "ember-inflector": "^6.0.0",
     "ember-page-title": "^9.0.3",
     "ember-qunit": "^9.0.2",
     "ember-source": "^6.7.0",
@@ -101,5 +114,31 @@
     "version": 2,
     "type": "addon",
     "main": "addon-main.cjs"
+  },
+  "engines": {
+    "node": ">= 22.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@ember-data/request-utils": "*",
+    "@ember/test-helpers": ">= 3",
+    "@ember/test-waiters": ">= 3",
+    "ember-data-model-fragments": "*",
+    "ember-inflector": "*",
+    "ember-qunit": ">= 8",
+    "qunit": ">= 2.17"
+  },
+  "peerDependenciesMeta": {
+    "@ember-data/request-utils": {
+      "optional": true
+    },
+    "ember-inflector": {
+      "optional": true
+    },
+    "ember-data-model-fragments": {
+      "optional": true
+    }
   }
 }
