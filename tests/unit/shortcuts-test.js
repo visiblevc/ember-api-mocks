@@ -221,7 +221,7 @@ module('Unit | type shortcuts through ember-data', function (hooks) {
       const update = api.update(investor, { name: 'From server' });
       const match = api
         .update('investor', investor.id)
-        .match({ data: { attributes: { name: 'Never' } } });
+        .withBody({ data: { attributes: { name: 'Never' } } });
 
       investor.name = 'New';
       await investor.save();

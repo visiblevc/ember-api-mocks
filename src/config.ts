@@ -7,6 +7,7 @@ export interface Options {
   format?: Format;
   beacons?: boolean;
   bypass?: string[];
+  id?: (type: string, n: number) => unknown;
 }
 
 export interface Settings {
@@ -17,6 +18,7 @@ export interface Settings {
   beacons: boolean;
   bypass: string[];
   bypassPercy: boolean;
+  id: (type: string, n: number) => unknown;
 }
 
 let options: Options = {};
@@ -74,6 +76,7 @@ export function settings(): Settings {
     beacons: options.beacons ?? false,
     bypass: (options.bypass ?? []).map((origin) => toUrl(origin).origin),
     bypassPercy: options.bypass === undefined,
+    id: options.id ?? ((_type, n) => n),
   };
   return resolved;
 }

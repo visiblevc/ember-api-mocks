@@ -32,6 +32,7 @@ type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 interface Guard {
   body?: unknown;
+  exactBody?: unknown;
   query?: unknown;
   partialQuery?: unknown;
   headers?: Record<string, HeaderValue>;
@@ -45,7 +46,10 @@ export interface Handle {
   readonly lastCall: Call;
   returns(...args: Arg[]): Handle;
   fails(status?: number, body?: unknown): Handle;
-  match(body: object | ((body: Json) => unknown)): Handle;
+  withBody(
+    body: object | ((body: Json) => unknown),
+    options?: { exact?: boolean },
+  ): Handle;
   withQuery(query: Attrs, options?: { partial?: boolean }): Handle;
   withHeaders(headers: Record<string, HeaderValue>): Handle;
   remove(): void;
@@ -114,7 +118,17 @@ function isObject(value: unknown): value is Attrs {
   return value !== null && typeof value === 'object';
 }
 
-function isSubset(expected: unknown, actual: unknown, exact = false): boolean {
+interface Comparison {
+  exact?: boolean;
+  typed?: boolean;
+}
+
+function isSubset(
+  expected: unknown,
+  actual: unknown,
+  comparison: Comparison = {},
+): boolean {
+  const { exact = false, typed = false } = comparison;
   expected = plain(expected);
   if (typeof expected === 'function') {
     return Boolean((expected as (value: unknown) => unknown)(actual));
@@ -122,21 +136,25 @@ function isSubset(expected: unknown, actual: unknown, exact = false): boolean {
     return (
       Array.isArray(actual) &&
       actual.length === expected.length &&
-      expected.every((value, index) => isSubset(value, actual[index], exact))
+      expected.every((value, index) =>
+        isSubset(value, actual[index], comparison),
+      )
     );
   } else if (isObject(expected)) {
     const entries = Object.entries(expected);
-    const required = entries.filter(([, value]) => value !== undefined);
     return (
       isObject(actual) &&
       !Array.isArray(actual) &&
-      (!exact || required.length === Object.keys(actual).length) &&
+      (!exact ||
+        Object.keys(actual).every(
+          (key) => Object.hasOwn(expected, key) && expected[key] !== undefined,
+        )) &&
       entries.every(
         ([key, value]) =>
           (Object.hasOwn(actual, key) ||
             value === undefined ||
             typeof value === 'function') &&
-          isSubset(value, actual[key], exact),
+          isSubset(value, actual[key], comparison),
       )
     );
   } else if (expected === null || expected === undefined) {
@@ -144,7 +162,7 @@ function isSubset(expected: unknown, actual: unknown, exact = false): boolean {
   } else if (isObject(actual)) {
     return false;
   }
-  return text(expected) === text(actual);
+  return typed ? expected === actual : text(expected) === text(actual);
 }
 
 function hasHeaders(
@@ -161,12 +179,15 @@ function hasHeaders(
 }
 
 function matches(
-  { body, query, partialQuery, headers }: Guard,
+  { body, exactBody, query, partialQuery, headers }: Guard,
   call: Call,
 ): boolean {
+  const typed = (call.headers.get('content-type') ?? '').includes('json');
   return (
-    (body === undefined || isSubset(body, call.body)) &&
-    (query === undefined || isSubset(query, call.query, true)) &&
+    (body === undefined || isSubset(body, call.body, { typed })) &&
+    (exactBody === undefined ||
+      isSubset(exactBody, call.body, { exact: true, typed })) &&
+    (query === undefined || isSubset(query, call.query, { exact: true })) &&
     (partialQuery === undefined || isSubset(partialQuery, call.query)) &&
     (headers === undefined || hasHeaders(headers, call.headers))
   );
@@ -247,8 +268,9 @@ function register(
       response = reply(status, body);
       return handle;
     },
-    match(body) {
-      where = { ...where, body };
+    withBody(body, { exact = false } = {}) {
+      const { body: _body, exactBody: _exact, ...rest } = where;
+      where = { ...rest, [exact ? 'exactBody' : 'body']: body };
       return handle;
     },
     withQuery(query, { partial = false } = {}) {
@@ -453,7 +475,9 @@ export const api = {
         ? values
         : ({ body }: Call) =>
             payload(type, {
-              id: format.idFromBody(type, body) ?? nextId(type),
+              id:
+                format.idFromBody(type, body) ??
+                settings().id(type, nextId(type)),
               ...values,
             });
 

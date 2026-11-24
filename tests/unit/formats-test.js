@@ -13,7 +13,9 @@ import {
   rest,
   sequence,
   sideload,
+  configure,
 } from '#src/index.ts';
+import { configureDefaults } from '../config.ts';
 import { setupTest } from '../helpers.js';
 import { transientOf } from '#src/factories.ts';
 
@@ -161,8 +163,8 @@ module('Unit | formats', function (hooks) {
 
     test('built records under an undeclared key throw', function (assert) {
       assert.throws(
-        () => build('post', { comments: buildList('comment', 2) }),
-        /build\('post'\) got built records under "comments". Declare it in the post factory's relationships/,
+        () => build('post', { replies: buildList('comment', 2) }),
+        /build\('post'\) got built records under "replies". Declare it in the post factory's relationships/,
       );
     });
 
@@ -180,6 +182,23 @@ module('Unit | formats', function (hooks) {
   });
 
   module('jsonApi', function () {
+    test('a built record override links with its own type', function (assert) {
+      defineFactory('pane', {
+        format: jsonApi(),
+        traits: {
+          withPerson: { owner: belongsTo('person') },
+          withGroup: { owner: belongsTo('investor-group') },
+        },
+      });
+      const group = build('investor-group');
+
+      const document = payload('pane', build('pane', { owner: group }));
+
+      assert.deepEqual(document.data.relationships, {
+        owner: { data: { type: 'investor-groups', id: '1' } },
+      });
+    });
+
     test('builds a document with data and included', function (assert) {
       const investor = build('investor', 'withPeople', 'withGroup');
 
@@ -369,6 +388,83 @@ module('Unit | formats', function (hooks) {
       ]);
       assert.strictEqual(build('uuid-thing', { id: 'mine' }).id, 'mine');
       assert.strictEqual(build('uuid-thing').id, 'thing-3');
+    });
+
+    test('configure sets how ids are generated', function (assert) {
+      configure({ id: (type, n) => `${type}-${n}` });
+
+      assert.strictEqual(build('contact').id, 'contact-1');
+      assert.strictEqual(build('contact', { id: 9 }).id, 9);
+      configureDefaults();
+    });
+
+    test('an _id override skips the default association', function (assert) {
+      defineFactory('membership', {
+        default: { company: belongsTo('company') },
+      });
+
+      const membership = build('membership', { company_id: 99 });
+
+      assert.deepEqual(membership, { id: 1, company_id: 99 });
+      assert.deepEqual(payload('membership', membership).companies, undefined);
+    });
+
+    test('a default association takes a built record override', function (assert) {
+      defineFactory('membership', {
+        default: { company: belongsTo('company') },
+        traits: { withContact: { contact: belongsTo('contact') } },
+      });
+      const company = build('company');
+      const contact = build('contact');
+
+      const membership = build('membership', { company, contact });
+
+      assert.deepEqual(membership, {
+        id: 1,
+        company_id: company.id,
+        contact_id: contact.id,
+      });
+      assert.deepEqual(
+        payload('membership', membership).companies.map(({ id }) => id),
+        [company.id],
+      );
+    });
+
+    test('an association assigned after build is sideloaded', function (assert) {
+      defineFactory('membership', {
+        default: { company: belongsTo('company') },
+      });
+      const membership = build('membership', { company_id: 1 });
+      const company = build('company');
+      membership.company = company;
+
+      const document = payload('membership', membership);
+
+      assert.strictEqual(document.membership.company_id, company.id);
+      assert.deepEqual(
+        document.companies.map(({ id }) => id),
+        [company.id],
+      );
+    });
+
+    test('a function overrides a default association', function (assert) {
+      defineFactory('membership', {
+        default: { company: belongsTo('company') },
+        traits: { computed: { company: () => 42 } },
+      });
+
+      assert.strictEqual(build('membership', 'computed').company, 42);
+    });
+
+    test('a built record under a wire key names the declared key', function (assert) {
+      defineFactory('membership', {
+        default: { company: belongsTo('company') },
+      });
+
+      assert.throws(
+        () => build('membership', { company_id: build('company') }),
+        /got built records under "company_id". Pass them under "company"/,
+      );
     });
 
     test('numeric string ids keep later ids from colliding', function (assert) {

@@ -4,6 +4,7 @@ import {
   api,
   build,
   buildList,
+  configure,
   payload,
   reply,
   seed,
@@ -11,7 +12,7 @@ import {
 } from '#src/index.ts';
 import { sourceOf } from '#src/store.ts';
 
-import { API_HOST } from '../config.ts';
+import { API_HOST, configureDefaults } from '../config.ts';
 import { collectFailures, send, setupTest } from '../helpers.js';
 
 module('Unit | api', function (hooks) {
@@ -103,14 +104,16 @@ module('Unit | api', function (hooks) {
     assert.strictEqual(succeeded.status, 200);
   });
 
-  test('match answers a body that contains the expected keys', async function (assert) {
+  test('withBody answers a body that contains the expected keys', async function (assert) {
     const fallback = api.put('/widgets/7', { widget: { id: 7 } });
     const subset = api
       .update('widget', 7)
-      .match({ widget: { name: 'Right', tag_ids: [1, 2] } });
-    const one = api.update('widget', 7).match({ widget: { tag_ids: [1] } });
-    const cleared = api.update('widget', 7).match({ widget: { size: null } });
-    const blank = api.update('widget', 7).match({ widget: { name: '' } });
+      .withBody({ widget: { name: 'Right', tag_ids: ['1', '2'] } });
+    const one = api.update('widget', 7).withBody({ widget: { tag_ids: [1] } });
+    const cleared = api
+      .update('widget', 7)
+      .withBody({ widget: { size: null } });
+    const blank = api.update('widget', 7).withBody({ widget: { name: '' } });
 
     await send('PUT', '/widgets/7', {
       widget: { name: 'Right', size: 1, tag_ids: ['1', '2'] },
@@ -125,13 +128,72 @@ module('Unit | api', function (hooks) {
     );
   });
 
-  test('match accepts predicates', async function (assert) {
+  test('withBody compares JSON values with their types', async function (assert) {
+    const numbers = api.create('widget').withBody({ widget: { size: 1 } });
+    const strings = api.create('widget').withBody({ widget: { size: '1' } });
+    const form = api.post('/forms').withBody({ widget: { size: 1 } });
+
+    await send('POST', '/widgets', { widget: { size: '1' } });
+    const data = new FormData();
+    data.append('widget[size]', '1');
+    await fetch(`${API_HOST}/forms`, { method: 'POST', body: data });
+
+    assert.deepEqual(
+      [numbers, strings, form].map((h) => h.timesCalled),
+      [0, 1, 1],
+    );
+  });
+
+  test('withBody exact rejects extra keys', async function (assert) {
+    const fallback = api.create('widget');
+    const exact = api
+      .create('widget')
+      .withBody({ widget: { name: 'A' } }, { exact: true });
+
+    await send('POST', '/widgets', { widget: { name: 'A', size: 1 } });
+    await send('POST', '/widgets', { widget: { name: 'A' } });
+
+    assert.deepEqual(
+      [exact, fallback].map((h) => h.timesCalled),
+      [1, 1],
+    );
+  });
+
+  test('create answers with an id from the configured generator', async function (assert) {
+    configure({ id: (type, n) => `${type}-${n}` });
+    api.create('widget');
+
+    const response = await send('POST', '/widgets', { widget: { name: 'A' } });
+
+    assert.strictEqual((await response.json()).widget.id, 'widget-1');
+    configureDefaults();
+  });
+
+  test('withBody exact allows only listed keys, predicates included', async function (assert) {
+    const fallback = api.create('widget');
+    const exact = api
+      .create('widget')
+      .withBody(
+        { widget: { name: 'A', size: (size) => size === undefined } },
+        { exact: true },
+      );
+
+    await send('POST', '/widgets', { widget: { name: 'A', color: 'red' } });
+    await send('POST', '/widgets', { widget: { name: 'A' } });
+
+    assert.deepEqual(
+      [exact, fallback].map((h) => h.timesCalled),
+      [1, 1],
+    );
+  });
+
+  test('withBody accepts predicates', async function (assert) {
     const whole = api
       .create('widget')
-      .match(({ widget }) => widget.name.startsWith('Wid'));
+      .withBody(({ widget }) => widget.name.startsWith('Wid'));
     const inside = api
       .create('gadget')
-      .match({ gadget: { name: (name) => name.length > 3 } });
+      .withBody({ gadget: { name: (name) => name.length > 3 } });
 
     const response = await send('POST', '/widgets', {
       widget: { name: 'Widget' },
@@ -347,7 +409,7 @@ module('Unit | api', function (hooks) {
     });
 
     test('a near miss on the body shows what was sent', async function (assert) {
-      api.post('/widgets', null).match({ widget: { name: 'A' } });
+      api.post('/widgets', null).withBody({ widget: { name: 'A' } });
 
       await send('POST', '/widgets', { widget: { name: 'B' } });
 
