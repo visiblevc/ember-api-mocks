@@ -56,7 +56,14 @@ function describeNearMisses(requestId: string): string {
     .map(({ expected, received }) => {
       const actual = Object.fromEntries(
         Object.keys(expected).map((key) => {
-          const value = received[key === 'partialQuery' ? 'query' : key];
+          const value =
+            received[
+              key === 'partialQuery'
+                ? 'query'
+                : key === 'exactBody'
+                  ? 'body'
+                  : key
+            ];
           return [
             key,
             key === 'headers'

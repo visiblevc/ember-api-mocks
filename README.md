@@ -17,7 +17,7 @@ module('Acceptance | contacts', function (hooks) {
   test('renames a contact', async function (assert) {
     const contacts = buildList('contact', 2, { company_id: 1 });
     api.query('contact', contacts, { meta: { total: 2 } });
-    const update = api.update(contacts[0]).match({ contact: { name: 'Ada' } });
+    const update = api.update(contacts[0]).withBody({ contact: { name: 'Ada' } });
 
     await visit('/contacts');
     await fillIn('[data-test-name]', 'Ada');
@@ -41,7 +41,7 @@ CI runs the addon's tests against:
 
 Classic ember-cli apps with ember-auto-import 2 work too, but CI does not build one. ember-data is optional: `api` and `build` work without it, `seed` needs it.
 
-Peer dependencies: `qunit` 2.17+, `@ember/test-helpers` 3+, `@ember/test-waiters` 3+. Optional: `ember-data` 4.12+, `ember-inflector` 4+, `@ember-data/request-utils` 5.3+, `ember-data-model-fragments` 9+.
+Peer dependencies: `qunit` 2.18+, `@ember/test-helpers` 3+, `@ember/test-waiters` 3+. Optional: `ember-data` 4.12+, `ember-inflector` 4+, `@ember-data/request-utils` 5.3+, `ember-data-model-fragments` 9+.
 
 ## Installation
 
@@ -101,6 +101,7 @@ Tests import these from `my-app/tests/helpers`, as generated tests already do. T
 | `origins` | `[]` | More origins that count as your app (a CDN, a second API). |
 | `bypass` | Percy's local server | Origins that always reach the network untouched. The default is the address `@percy/sdk-utils` reports (`http://localhost:5338` unless Percy says otherwise); setting `bypass` replaces it. |
 | `beacons` | `false` | Send `navigator.sendBeacon` through `fetch` so mocks can answer it. |
+| `id` | `(name, n) => n` | Generates built ids from the factory name and its sequence number, and the id `api.create` answers with when the body has none. `(type, n) => String(n)` gives string ids like the ones ember-data sends back. |
 
 `configure` merges with earlier calls. Settings are read when the first test runs.
 
@@ -181,7 +182,7 @@ defineFactory('subscription', {
 ```
 
 - `build(name, ...traits, overrides)` returns a plain JSON record with an `id`. `buildList(name, 3, ...traits, overrides)` returns three; without a count, each argument describes one record: `buildList('user', { name: 'A' }, ['admin', { name: 'B' }])`.
-- Ids count up from 1 per factory and restart for every test. An explicit id (`{ id: 5 }` or `{ id: '5' }`) moves the counter past it. For string or uuid ids, set `default.id` to a `sequence((n) => ...)`.
+- Ids count up from 1 per factory and restart for every test. An explicit id (`{ id: 5 }` or `{ id: '5' }`) moves the counter past it. For string ids everywhere, set `configure({ id: (name, n) => String(n) })`; for one factory, set `default.id` to a `sequence((n) => ...)`.
 - Defaults are copied per record. A function value is called with the record once the other values are set.
 - A `sequence` advances only when the default value is used. For values that follow the id, as in Mirage's `(i) => ...`, use a function of the record: `` name: ({ id }) => `User ${id}` ``.
 - `transient` values are options, not attributes. Read them in `afterSeed`.
@@ -198,7 +199,9 @@ payload('company', company);
 //   subscriptions: [{ id: 1, plan_id: 'basic', status: 'trialing' }] }
 ```
 
-In `relationships`, they only declare the type, so overrides can pass an id, a list of ids, a built record or, for a polymorphic relationship, `{ type, id }`:
+Overriding the wire key skips the build: `build('membership', { company_id: 99 })` writes `company_id: 99` and sideloads nothing.
+
+A key with an association in `default`, a trait or `relationships` is declared. In `relationships`, they only declare the type. Overrides of a declared key can pass an id, a list of ids, a built record or, for a polymorphic relationship, `{ type, id }`:
 
 ```js
 build('subscription', { company: 3 }); // company_id: 3
@@ -279,7 +282,7 @@ Every call returns a handle:
 ```js
 const create = api
   .create('contact', { name: 'Ada' })
-  .match({ contact: { name: 'Ada', tag_ids: ['1', '2'] } })
+  .withBody({ contact: { name: 'Ada', tag_ids: ['1', '2'] } })
   .withHeaders({ Authorization: (value) => value?.startsWith('Bearer ') });
 
 await click('[data-test-save]');
@@ -289,7 +292,7 @@ assert.deepEqual(create.lastCall.body.contact.tag_ids, ['1', '2']);
 ```
 
 - `timesCalled`, `calls` and `lastCall`. A call has `method`, `url`, `params`, `query`, `body` (parsed JSON or form data) and `headers`.
-- `.match(body)` answers only when the body contains these keys. Objects match as subsets, arrays in full, values compare as strings, a key must be sent (`null` and `''` too), and a function is called with the value.
+- `.withBody(body)` answers only when the body contains these keys. Objects match as subsets, arrays in full, a key must be sent (`null` and `''` too), and a function is called with the value. JSON values compare with their types, so `1` does not match `'1'`; form data values compare as strings. `.withBody(body, { exact: true })` also rejects keys the guard does not list, at any depth. Note the defaults differ: `withBody` matches a subset unless `exact`, `withQuery` matches exactly unless `partial`.
 - `.withQuery(params)` answers only the exact query: every param present, nothing extra, and `ids[]=1` is an array, not `1`. A repeated `ids=1&ids=2` is an array too. `.withQuery(params, { partial: true })` ignores other params.
 - `.withHeaders(headers)` matches header names in any case. A value is a string, a predicate, or `null` for absent.
 - `.returns(...)` changes the response. On a shortcut it takes the shortcut's arguments: `query.returns(list, { meta })`, `find.returns(record, extra)`, `create.returns(attrs)`.
@@ -322,14 +325,14 @@ With `configure({ beacons: true })`, `navigator.sendBeacon` goes through `fetch`
 | `mockFindRecord(user)` | `api.find(user)` |
 | `mockFindAll('user')` | `api.query('user', records)` |
 | `mockQuery('user', { page: 1 }).returns({ models })` | `api.query('user', records).withQuery({ page: 1 })` |
-| `mockCreate('user').match(attrs).returns({ attrs })` | `api.create('user', attrs).match(wireBody)` |
+| `mockCreate('user').match(attrs).returns({ attrs })` | `api.create('user', attrs).withBody(wireBody)` |
 | `mockUpdate(user).fails({ status: 422, response })` | `api.update(user).fails(422, body)` |
 | `mockDelete(user)` | `api.destroy(user)` |
 | `mock({ type: 'GET', url, responseText })` | `api.get(url, response)` |
 | `.timesCalled` | `.timesCalled`, `.calls`, `.lastCall` |
 | `setupFactoryGuy(this)` | `setupApiMocks(hooks)` in `tests/helpers/index.js` |
 
-`match` sees the request body as sent, in the API's keys, not model attributes.
+`withBody` sees the request body as sent, in the API's keys, not model attributes.
 
 ### From Mirage
 
@@ -368,7 +371,7 @@ api.destroy('user', ({ params }) => {
 - Code that captured `window.fetch` before the interceptors patched it bypasses the mocks.
 - Mock the request instead of stubbing `window.fetch` (for example with `sinon.stub(window, 'fetch')`). A stub replaces the mocking wrapper for that test; one restored after teardown leaves a stale wrapper behind, which passes requests straight to the original `fetch` and is unwrapped when the next test starts.
 - Query values arrive as strings, and an exact `withQuery` must list empty params too (`?tag=` is `{ tag: '' }`).
-- Built ids are numbers (JSON:API documents stringify them) and request bodies carry strings. Compare with `String(record.id)`.
+- Built ids are numbers by default (JSON:API documents stringify them), while ember-data sends ids as strings. Set `configure({ id: (type, n) => String(n) })` so built ids compare directly with what the app sends.
 - A record in a response must come from `build` or `seed`. A record from `store.createRecord` throws; respond with JSON.
 - Requests sent together (`Promise.all`) are matched after their bodies are parsed, so their handlers can run in either order. Assert on each handle's `calls`, not on the order of `api.requests`.
 - `api.query` with a list answers the same payload whatever the query. For paging or search, pass a function that returns `payload(type, records.slice(...), { meta })`.

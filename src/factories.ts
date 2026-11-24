@@ -118,6 +118,22 @@ export function definitionOf(
   return { ...definition, format: definition.format ?? settings().format };
 }
 
+function declaredAssociations(
+  definition: FactoryDefinition,
+): Record<string, Association> {
+  const sources = [
+    definition.default,
+    ...Object.values(definition.traits ?? {}),
+  ];
+  const associations = sources.flatMap((values) =>
+    Object.entries(isPlainObject(values) ? values : {}).filter(
+      (entry): entry is [string, Association] =>
+        entry[1] instanceof Association && entry[1].kind !== 'fragment',
+    ),
+  );
+  return { ...Object.fromEntries(associations), ...definition.relationships };
+}
+
 function isBuilt(value: unknown): value is BuiltRecord {
   return (
     value !== null &&
@@ -153,7 +169,7 @@ export function build<T extends object = BuiltRecord>(
     ? (args.pop() as Overrides)
     : {};
   const transientKeys = new Set(Object.keys(definition.transient ?? {}));
-  const declared = definition.relationships ?? {};
+  const declared = declaredAssociations(definition);
 
   const attrs: Attrs = { ...definition.transient, ...definition.default };
   const mutations: Array<(record: BuiltRecord) => void> = [];
@@ -181,7 +197,9 @@ export function build<T extends object = BuiltRecord>(
   const { id } = attrs;
   const record: BuiltRecord = {
     id:
-      id instanceof Sequence ? id.generate(nextId(name)) : (id ?? nextId(name)),
+      id instanceof Sequence
+        ? id.generate(nextId(name))
+        : (id ?? settings().id(name, nextId(name))),
   };
   if (Number.isInteger(Number(id)) && id !== '' && id !== null) {
     sequences.set(name, Math.max(sequences.get(name) ?? 0, Number(id)));
@@ -204,10 +222,22 @@ export function build<T extends object = BuiltRecord>(
         ...(value.args as BuildArg[]),
       );
       record[key] = nested;
-    } else if (value instanceof Association || declared[key]) {
+    } else if (
+      value instanceof Association ||
+      (declared[key] && typeof value !== 'function')
+    ) {
       const { type, kind } = (
         value instanceof Association ? value : declared[key]
       ) as Relationship;
+      const wireKey = format.relationshipKey(key, kind);
+      if (
+        value instanceof Association &&
+        wireKey !== key &&
+        Object.hasOwn(overrides, wireKey)
+      ) {
+        relationships.set(wireKey, { type, kind });
+        continue;
+      }
       if (
         value instanceof Association &&
         kind === 'hasMany' &&
@@ -223,15 +253,26 @@ export function build<T extends object = BuiltRecord>(
             ? buildList(type, ...value.args)
             : build(type, ...(value.args as BuildArg[]))
           : value;
-      const wireKey = format.relationshipKey(key, kind);
       record[wireKey] = link({ type, kind }, built, related);
-      relationships.set(wireKey, { type, kind });
+      relationships.set(wireKey, {
+        type: kind === 'belongsTo' ? (factoryOf(built) ?? type) : type,
+        kind,
+      });
     } else if (typeof value === 'function') {
       record[key] = undefined;
       deferred.push([key, value as (record: BuiltRecord) => unknown]);
     } else if ([value].flat().some(isBuilt)) {
+      const owner = Object.entries(declared).find(
+        ([declaredKey, association]) =>
+          format.relationshipKey(
+            declaredKey,
+            association.kind as RelationshipKind,
+          ) === key,
+      )?.[0];
       throw new Error(
-        `build('${name}') got built records under "${key}". Declare it in the ${name} factory's relationships: { ${key}: belongsTo(...) } or hasMany(...).`,
+        owner
+          ? `build('${name}') got built records under "${key}". Pass them under "${owner}".`
+          : `build('${name}') got built records under "${key}". Declare it in the ${name} factory's relationships: { ${key}: belongsTo(...) } or hasMany(...).`,
       );
     } else {
       record[key] = clone(value);
@@ -314,7 +355,7 @@ function declaredRelationships(
   name: string,
   format: Format,
 ): Array<[string, string, Relationship]> {
-  return Object.entries(definitions.get(name)?.relationships ?? {})
+  return Object.entries(declaredAssociations(definitions.get(name) ?? {}))
     .filter(([, association]) => association.kind !== 'fragment')
     .map(([key, association]) => {
       const kind = association.kind as RelationshipKind;

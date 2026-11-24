@@ -52,7 +52,7 @@ module('Unit | types', function (hooks) {
   test('handles type the README patterns', async function (assert) {
     const create = api
       .create('contact', { name: 'Ada' })
-      .match({ contact: { name: 'Ada', tag_ids: ['1', '2'] } })
+      .withBody({ contact: { name: 'Ada', tag_ids: ['1', '2'] } })
       .withHeaders({ Authorization: (value) => value?.startsWith('Bearer ') });
     api.put('/reports/:id', ({ params, body }) => ({
       report: { id: params.id, ...body.report },
