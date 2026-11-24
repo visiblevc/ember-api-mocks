@@ -2,8 +2,8 @@
   "solution": {
     "@visiblevc/ember-api-mocks": {
       "impact": "minor",
-      "oldVersion": "0.2.0",
-      "newVersion": "0.3.0",
+      "oldVersion": "0.3.0",
+      "newVersion": "0.4.0",
       "tagName": "latest",
       "constraints": [
         {
@@ -14,5 +14,5 @@
       "pkgJSONPath": "./package.json"
     }
   },
-  "description": "## Release (2026-11-23)\n\n* @visiblevc/ember-api-mocks 0.3.0 (minor)\n\n#### :rocket: Enhancement\n* `@visiblevc/ember-api-mocks`\n  * [#5](https://github.com/visiblevc/ember-api-mocks/pull/5) Replace the setup wrappers with a `setupApiMocks` hook ([@whatthewhat](https://github.com/whatthewhat))\n\n#### Committers: 1\n- Mikhail Topolskiy ([@whatthewhat](https://github.com/whatthewhat))\n"
+  "description": "## Release (2026-11-24)\n\n* @visiblevc/ember-api-mocks 0.4.0 (minor)\n\n#### :rocket: Enhancement\n* `@visiblevc/ember-api-mocks`\n  * [#7](https://github.com/visiblevc/ember-api-mocks/pull/7) Add an id option and withBody, count default associations as declared, mock through teardown ([@whatthewhat](https://github.com/whatthewhat))\n\n#### Committers: 1\n- Mikhail Topolskiy ([@whatthewhat](https://github.com/whatthewhat))\n"
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## Release (2026-11-24)
+
+* @visiblevc/ember-api-mocks 0.4.0 (minor)
+
+#### :rocket: Enhancement
+* `@visiblevc/ember-api-mocks`
+  * [#7](https://github.com/visiblevc/ember-api-mocks/pull/7) Add an id option and withBody, count default associations as declared, mock through teardown ([@whatthewhat](https://github.com/whatthewhat))
+
+#### Committers: 1
+- Mikhail Topolskiy ([@whatthewhat](https://github.com/whatthewhat))
+
 ## Release (2026-11-23)
 
 * @visiblevc/ember-api-mocks 0.3.0 (minor)
