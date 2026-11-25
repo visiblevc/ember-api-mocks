@@ -51,7 +51,7 @@ npm only lets you add a trusted publisher to a package that already exists, so t
 
 ### Provenance
 
-A hand-published version has no provenance attestation. CI can attest provenance only for a public repository: once the repository is public, set `NPM_CONFIG_PROVENANCE: true` on the publish step.
+CI publishes with `NPM_CONFIG_PROVENANCE: true`, so every release from `publish.yml` carries a provenance attestation. Versions up to 0.4.0 were published while the repository was private and have none.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#versioning) for how versions are chosen before 1.0.
 

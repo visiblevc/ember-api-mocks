@@ -39,8 +39,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Publish to NPM
-        # Add NPM_CONFIG_PROVENANCE=true once the repository is public;
-        # npm cannot attest provenance for a private repository.
         run: pnpm release-plan publish
         env:
           GITHUB_AUTH: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
