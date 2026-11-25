@@ -5,7 +5,7 @@ if (typeof module !== 'undefined') {
     test_page: 'tests/index.html?hidepassed',
     cwd: 'dist-tests',
     disable_watching: true,
-    launch_in_ci: ['Chrome'],
+    launch_in_ci: process.env.CI ? ['Chrome', 'Firefox'] : ['Chrome'],
     launch_in_dev: ['Chrome'],
     browser_start_timeout: 120,
     browser_args: {
@@ -20,6 +20,9 @@ if (typeof module !== 'undefined') {
           '--remote-debugging-port=0',
           '--window-size=1440,900',
         ].filter(Boolean),
+      },
+      Firefox: {
+        ci: ['--headless', '--width=1440', '--height=900'],
       },
     },
   };
