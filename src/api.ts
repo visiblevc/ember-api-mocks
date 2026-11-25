@@ -88,18 +88,21 @@ function parseEntries(entries: Iterable<[string, unknown]>): Attrs {
 }
 
 async function parseBody(request: Request): Promise<unknown> {
-  const contentType = request.headers.get('content-type') ?? '';
-  if (!request.body) {
+  const text = await request.clone().text();
+  if (!text) {
     return undefined;
-  } else if (contentType.includes('json')) {
-    return request.clone().json();
+  }
+
+  const contentType = request.headers.get('content-type') ?? '';
+  if (contentType.includes('json')) {
+    return JSON.parse(text);
   } else if (
     contentType.includes('form-data') ||
     contentType.includes('x-www-form-urlencoded')
   ) {
     return parseEntries(await request.clone().formData());
   }
-  return request.clone().text();
+  return text;
 }
 
 function plain(value: unknown): unknown {
