@@ -1,5 +1,21 @@
 # Changelog
 
+## Release (2026-11-25)
+
+* @visiblevc/ember-api-mocks 0.4.1 (patch)
+
+#### :bug: Bug Fix
+* `@visiblevc/ember-api-mocks`
+  * [#11](https://github.com/visiblevc/ember-api-mocks/pull/11) Read request bodies in Firefox ([@grayt0r](https://github.com/grayt0r))
+
+#### :house: Internal
+* `@visiblevc/ember-api-mocks`
+  * [#9](https://github.com/visiblevc/ember-api-mocks/pull/9) Attest npm provenance on release ([@whatthewhat](https://github.com/whatthewhat))
+
+#### Committers: 2
+- Mikhail Topolskiy ([@whatthewhat](https://github.com/whatthewhat))
+- Ross Grayton ([@grayt0r](https://github.com/grayt0r))
+
 ## Release (2026-11-24)
 
 * @visiblevc/ember-api-mocks 0.4.0 (minor)
